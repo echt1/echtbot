@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bot Dashboard</title>
+<style>
+  :root {
+    --bg: #0e0f13; --surface: #16181d; --surface2: #1e2029;
+    --border: #2a2d38; --accent: #5865f2; --accent2: #3ba55c;
+    --red: #ed4245; --yellow: #faa61a; --text: #e3e5e8; --muted: #72767d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  /* Login */
+  #login { display:flex; align-items:center; justify-content:center; min-height:100vh; }
+  .login-box { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:40px; width:340px; text-align:center; }
+  .login-box h1 { font-size:1.4rem; margin-bottom:8px; }
+  .login-box p  { color:var(--muted); font-size:.9rem; margin-bottom:24px; }
+  .login-box input { width:100%; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:.95rem; margin-bottom:12px; }
+  .login-box input:focus { outline:none; border-color:var(--accent); }
+  #login-err { color:var(--red); font-size:.85rem; margin-bottom:10px; min-height:18px; }
+
+  /* App */
+  #app { display:none; }
+  .sidebar { position:fixed; top:0; left:0; width:220px; height:100vh; background:var(--surface); border-right:1px solid var(--border); padding:20px 12px; display:flex; flex-direction:column; gap:4px; }
+  .sidebar .logo { font-size:1.1rem; font-weight:700; padding:8px 12px 20px; color:var(--accent); }
+  .nav-item { padding:10px 12px; border-radius:8px; cursor:pointer; font-size:.9rem; color:var(--muted); transition:.15s; display:flex; align-items:center; gap:10px; }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:var(--accent); color:#fff; }
+  .main { margin-left:220px; padding:32px; max-width:960px; }
+  .page { display:none; }
+  .page.active { display:block; }
+
+  /* Cards */
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; margin-bottom:28px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
+  .card .label { font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+  .card .value { font-size:1.8rem; font-weight:700; }
+  .card .sub   { font-size:.82rem; color:var(--muted); margin-top:4px; }
+
+  /* Section */
+  .section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:20px; }
+  .section h2 { font-size:1rem; font-weight:600; margin-bottom:18px; }
+
+  /* Form elements */
+  select, input[type=text], input[type=password] {
+    background:var(--bg); border:1px solid var(--border); color:var(--text);
+    padding:8px 12px; border-radius:8px; font-size:.9rem;
+  }
+  select:focus, input:focus { outline:none; border-color:var(--accent); }
+  .btn { padding:8px 18px; border-radius:8px; border:none; cursor:pointer; font-size:.9rem; font-weight:500; transition:.15s; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:#4752c4; }
+  .btn-danger  { background:var(--red); color:#fff; }
+  .btn-danger:hover { background:#c03537; }
+  .btn-sm { padding:5px 12px; font-size:.82rem; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .row label { font-size:.88rem; color:var(--muted); min-width:120px; }
+
+  /* Toggle */
+  .toggle { position:relative; width:42px; height:24px; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .toggle .slider { position:absolute; inset:0; background:var(--border); border-radius:12px; cursor:pointer; transition:.2s; }
+  .toggle .slider:before { content:''; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+  .toggle input:checked + .slider { background:var(--accent2); }
+  .toggle input:checked + .slider:before { transform:translateX(18px); }
+
+  /* Table */
+  table { width:100%; border-collapse:collapse; font-size:.88rem; }
+  th { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); color:var(--muted); font-weight:500; }
+  td { padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:.75rem; font-weight:600; }
+  .badge-yt  { background:#ff000033; color:#ff4444; }
+  .badge-tw  { background:#9146ff33; color:#b07aff; }
+  .badge-tt  { background:#ffffff18; color:#ccc; }
+
+  .tag { display:inline-block; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:3px 10px; font-size:.82rem; margin:2px; }
+  .success { color:var(--accent2); font-size:.85rem; margin-top:8px; min-height:18px; }
+  .status-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; }
+  .dot-online { background:#3ba55c; } .dot-idle { background:#faa61a; } .dot-dnd { background:#ed4245; }
+  .empty { color:var(--muted); font-size:.88rem; padding:16px 0; text-align:center; }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login">
+  <div class="login-box">
+    <h1>🤖 Bot Dashboard</h1>
+    <p>Dashboard-Token eingeben</p>
+    <input type="password" id="token-input" placeholder="Token..." autofocus>
+    <div id="login-err"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Einloggen</button>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <nav class="sidebar">
+    <div class="logo">🤖 Dashboard</div>
+    <div class="nav-item active" onclick="nav('overview')">📊 Übersicht</div>
+    <div class="nav-item" onclick="nav('status')">🎮 Bot-Status</div>
+    <div class="nav-item" onclick="nav('automod')">🛡️ Automod</div>
+    <div class="nav-item" onclick="nav('warnings')">⚠️ Verwarnungen</div>
+    <div class="nav-item" onclick="nav('tickets')">🎫 Tickets</div>
+    <div class="nav-item" onclick="nav('social')">📡 Social Media</div>
+  </nav>
+  <main class="main">
+
+    <!-- Übersicht -->
+    <div id="page-overview" class="page active">
+      <h1 style="font-size:1.4rem;margin-bottom:24px">Übersicht</h1>
+      <div class="grid">
+        <div class="card"><div class="label">Bot</div><div class="value" id="ov-tag" style="font-size:1.1rem;margin-top:4px">–</div></div>
+        <div class="card"><div class="label">Server</div><div class="value" id="ov-guilds">–</div></div>
+        <div class="card"><div class="label">User gesamt</div><div class="value" id="ov-users">–</div></div>
+        <div class="card"><div class="label">Uptime</div><div class="value" id="ov-uptime" style="font-size:1.1rem;margin-top:4px">–</div></div>
+      </div>
+      <div class="section">
+        <h2>Aktueller Status</h2>
+        <div id="ov-status" style="font-size:.95rem">–</div>
+      </div>
+    </div>
+
+    <!-- Bot-Status -->
+    <div id="page-status" class="page">
+      <h1 style="font-size:1.4rem;margin-bottom:24px">Bot-Status setzen</h1>
+      <div class="section">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="row"><label>Aktivitätstyp</label>
+            <select id="s-typ">
+              <option value="watching">👀 Watching</option>
+              <option value="playing">🎮 Playing</option>
+              <option value="listening">🎧 Listening</option>
+              <option value="competing">🏆 Competing</option>
+            </select>
+          </div>
+          <div class="row"><label>Statustext</label>
+            <input type="text" id="s-text" placeholder="z.B. /help | discord.gg/..." style="width:300px">
+          </div>
+          <div class="row"><label>Online-Status</label>
+            <select id="s-online">
+              <option value="online">🟢 Online</option>
+              <option value="idle">🟡 Idle</option>
+              <option value="dnd">🔴 Do Not Disturb</option>
+            </select>
+          </div>
+          <div><button class="btn btn-primary" onclick="saveStatus()">✅ Speichern</button>
+          <span class="success" id="status-msg"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Automod -->
+    <div id="page-automod" class="page">
+      <h1 style="font-size:1.4rem;margin-bottom:24px">Automod</h1>
+      <div id="automod-content"><div class="empty">Laden...</div></div>
+    </div>
+
+    <!-- Warnings -->
+    <div id="page-warnings" class="page">
+      <h1 style="font-size:1.4rem;margin-bottom:24px">Verwarnungen</h1>
+      <div id="warnings-content"><div class="empty">Laden...</div></div>
+    </div>
+
+    <!-- Tickets -->
+    <div id="page-tickets" class="page">
+      <h1 style="font-size:1.4rem;margin-bottom:24px">Aktive Tickets</h1>
+      <div id="tickets-content"><div class="empty">Laden...</div></div>
+    </div>
+
+    <!-- Social -->
+    <div id="page-social" class="page">
+      <h1 style="font-size:1.4rem;margin-bottom:24px">Social Media Notifications</h1>
+      <div id="social-content"><div class="empty">Laden...</div></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let TOKEN = '';
+let guilds = {};
+
+function doLogin() {
+  TOKEN = document.getElementById('token-input').value.trim();
+  fetch('/api/stats', { headers: { authorization: TOKEN } }).then(r => {
+    if (r.status === 401) { document.getElementById('login-err').textContent = 'Falscher Token.'; TOKEN = ''; return; }
+    localStorage.setItem('dash_token', TOKEN);
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadAll();
+  });
+}
+document.getElementById('token-input').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+
+// Auto-login wenn Token gespeichert
+const saved = localStorage.getItem('dash_token');
+if (saved) { TOKEN = saved; fetch('/api/stats',{headers:{authorization:TOKEN}}).then(r=>{ if(r.ok){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';loadAll();}else{localStorage.removeItem('dash_token');} }); }
+
+async function api(path, opts={}) {
+  const r = await fetch(path, { ...opts, headers: { authorization: TOKEN, 'content-type':'application/json', ...(opts.headers||{}) } });
+  return r.json();
+}
+
+function nav(page) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  event.target.classList.add('active');
+  if (page==='overview')  loadOverview();
+  if (page==='automod')   loadAutomod();
+  if (page==='warnings')  loadWarnings();
+  if (page==='tickets')   loadTickets();
+  if (page==='social')    loadSocial();
+  if (page==='status')    loadStatus();
+}
+
+function fmt(sec) {
+  const d=Math.floor(sec/86400), h=Math.floor((sec%86400)/3600), m=Math.floor((sec%3600)/60);
+  return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;
+}
+
+async function loadAll() {
+  guilds = await api('/api/guilds');
+  loadOverview();
+}
+
+async function loadOverview() {
+  const s = await api('/api/stats');
+  document.getElementById('ov-tag').textContent = s.tag;
+  document.getElementById('ov-guilds').textContent = s.guilds;
+  document.getElementById('ov-users').textContent = s.users.toLocaleString();
+  document.getElementById('ov-uptime').textContent = fmt(s.uptime);
+  const bs = s.botstatus;
+  const dotClass = {online:'dot-online',idle:'dot-idle',dnd:'dot-dnd'}[bs.status]||'dot-online';
+  document.getElementById('ov-status').innerHTML =
+    `<span class="status-dot ${dotClass}"></span><strong>${bs.typ}</strong> ${bs.text} &nbsp;<span style="color:var(--muted)">(${bs.status})</span>`;
+}
+
+async function loadStatus() {
+  const s = await api('/api/stats');
+  const bs = s.botstatus;
+  document.getElementById('s-typ').value    = bs.typ || 'watching';
+  document.getElementById('s-text').value   = bs.text || '';
+  document.getElementById('s-online').value = bs.status || 'online';
+}
+
+async function saveStatus() {
+  await api('/api/status', { method:'POST', body: JSON.stringify({
+    typ:    document.getElementById('s-typ').value,
+    text:   document.getElementById('s-text').value,
+    status: document.getElementById('s-online').value,
+  })});
+  const el = document.getElementById('status-msg');
+  el.textContent = '✅ Gespeichert!';
+  setTimeout(()=>el.textContent='', 2500);
+  loadOverview();
+}
+
+async function loadAutomod() {
+  const data = await api('/api/automod');
+  const el = document.getElementById('automod-content');
+  const guildIds = Object.keys(data);
+  if (!guildIds.length) { el.innerHTML='<div class="empty">Keine Automod-Konfigurationen gefunden.</div>'; return; }
+  el.innerHTML = guildIds.map(gId => {
+    const g = data[gId]; const name = guilds[gId]?.name || gId;
+    const words = (g.bannedWords||[]).map(w=>`<span class="tag">${w}</span>`).join('') || '<span style="color:var(--muted)">Keine</span>';
+    return `<div class="section">
+      <h2>${name}</h2>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="row"><label>Automod aktiv</label>
+          <label class="toggle"><input type="checkbox" ${g.enabled?'checked':''} onchange="patchAutomod('${gId}',{enabled:this.checked})"><span class="slider"></span></label>
+        </div>
+        <div class="row"><label>Invite-Links blocken</label>
+          <label class="toggle"><input type="checkbox" ${g.blockInvites?'checked':''} onchange="patchAutomod('${gId}',{blockInvites:this.checked})"><span class="slider"></span></label>
+        </div>
+        <div class="row"><label>Spam-Schutz</label>
+          <label class="toggle"><input type="checkbox" ${g.blockSpam?'checked':''} onchange="patchAutomod('${gId}',{blockSpam:this.checked})"><span class="slider"></span></label>
+        </div>
+        <div class="row"><label>Aktion</label>
+          <select onchange="patchAutomod('${gId}',{action:this.value})">
+            <option value="warn" ${g.action==='warn'?'selected':''}>Nur Warnen</option>
+            <option value="mute" ${g.action==='mute'?'selected':''}>Mute</option>
+            <option value="kick" ${g.action==='kick'?'selected':''}>Kick</option>
+          </select>
+        </div>
+        <div class="row" style="align-items:flex-start"><label style="margin-top:4px">Verbotene Wörter</label>
+          <div>${words}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function patchAutomod(guildId, patch) {
+  await api(`/api/automod/${guildId}`, { method:'POST', body: JSON.stringify(patch) });
+}
+
+async function loadWarnings() {
+  const data = await api('/api/warnings');
+  const el = document.getElementById('warnings-content');
+  let html = '';
+  for (const [gId, users] of Object.entries(data)) {
+    const name = guilds[gId]?.name || gId;
+    const rows = Object.entries(users).map(([uid, warns]) =>
+      `<tr><td><code>${uid}</code></td><td>${warns.length}</td><td>${warns.map(w=>`<div style="font-size:.8rem">${w.reason}</div>`).join('')}</td>
+       <td><button class="btn btn-danger btn-sm" onclick="deleteWarnings('${gId}','${uid}')">Löschen</button></td></tr>`
+    ).join('');
+    if (!rows) continue;
+    html += `<div class="section"><h2>${name}</h2><table>
+      <tr><th>User-ID</th><th>Anzahl</th><th>Gründe</th><th></th></tr>${rows}</table></div>`;
+  }
+  el.innerHTML = html || '<div class="empty">Keine Verwarnungen vorhanden.</div>';
+}
+
+async function deleteWarnings(gId, uid) {
+  await api(`/api/warnings/${gId}/${uid}`, { method:'DELETE' });
+  loadWarnings();
+}
+
+async function loadTickets() {
+  const data = await api('/api/tickets');
+  const el = document.getElementById('tickets-content');
+  let html = '';
+  for (const [gId, tickets] of Object.entries(data)) {
+    const name = guilds[gId]?.name || gId;
+    const rows = Object.entries(tickets).map(([chId, t]) =>
+      `<tr><td><code>${chId}</code></td><td><code>${t.userId}</code></td><td>${new Date(t.openedAt).toLocaleString('de-DE')}</td></tr>`
+    ).join('');
+    if (!rows) continue;
+    html += `<div class="section"><h2>${name}</h2><table>
+      <tr><th>Channel-ID</th><th>User-ID</th><th>Geöffnet</th></tr>${rows}</table></div>`;
+  }
+  el.innerHTML = html || '<div class="empty">Keine offenen Tickets.</div>';
+}
+
+async function loadSocial() {
+  const data = await api('/api/social');
+  const el = document.getElementById('social-content');
+  let html = '';
+  const badgeClass = { youtube:'badge-yt', twitch:'badge-tw', tiktok:'badge-tt' };
+  for (const [gId, entries] of Object.entries(data)) {
+    if (!entries.length) continue;
+    const name = guilds[gId]?.name || gId;
+    const rows = entries.map(e =>
+      `<tr><td><span class="badge ${badgeClass[e.platform]||''}">${e.platform}</span></td>
+       <td>${e.handle}</td><td><code>${e.channelId}</code></td></tr>`
+    ).join('');
+    html += `<div class="section"><h2>${name}</h2><table>
+      <tr><th>Plattform</th><th>Kanal/Username</th><th>Discord-Channel</th></tr>${rows}</table></div>`;
+  }
+  el.innerHTML = html || '<div class="empty">Keine Social-Media-Beobachtungen aktiv.</div>';
+}
+</script>
+</body>
+</html>
