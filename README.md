@@ -1,0 +1,2 @@
+# echtbot
+Discord Bot
