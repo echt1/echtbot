@@ -1,92 +1,83 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Bot Dashboard</title>
 <style>
-  :root {
-    --bg: #0e0f13; --surface: #16181d; --surface2: #1e2029;
-    --border: #2a2d38; --accent: #5865f2; --accent2: #3ba55c;
-    --red: #ed4245; --yellow: #faa61a; --text: #e3e5e8; --muted: #72767d;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
-
-  /* Login */
-  #login { display:flex; align-items:center; justify-content:center; min-height:100vh; }
-  .login-box { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:40px; width:340px; text-align:center; }
-  .login-box h1 { font-size:1.4rem; margin-bottom:8px; }
-  .login-box p  { color:var(--muted); font-size:.9rem; margin-bottom:24px; }
-  .login-box input { width:100%; padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:.95rem; margin-bottom:12px; }
-  .login-box input:focus { outline:none; border-color:var(--accent); }
-  #login-err { color:var(--red); font-size:.85rem; margin-bottom:10px; min-height:18px; }
-
-  /* App */
-  #app { display:none; }
-  .sidebar { position:fixed; top:0; left:0; width:220px; height:100vh; background:var(--surface); border-right:1px solid var(--border); padding:20px 12px; display:flex; flex-direction:column; gap:4px; }
-  .sidebar .logo { font-size:1.1rem; font-weight:700; padding:8px 12px 20px; color:var(--accent); }
-  .nav-item { padding:10px 12px; border-radius:8px; cursor:pointer; font-size:.9rem; color:var(--muted); transition:.15s; display:flex; align-items:center; gap:10px; }
-  .nav-item:hover { background:var(--surface2); color:var(--text); }
-  .nav-item.active { background:var(--accent); color:#fff; }
-  .main { margin-left:220px; padding:32px; max-width:960px; }
-  .page { display:none; }
-  .page.active { display:block; }
-
-  /* Cards */
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; margin-bottom:28px; }
-  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
-  .card .label { font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
-  .card .value { font-size:1.8rem; font-weight:700; }
-  .card .sub   { font-size:.82rem; color:var(--muted); margin-top:4px; }
-
-  /* Section */
-  .section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:20px; }
-  .section h2 { font-size:1rem; font-weight:600; margin-bottom:18px; }
-
-  /* Form elements */
-  select, input[type=text], input[type=password] {
-    background:var(--bg); border:1px solid var(--border); color:var(--text);
-    padding:8px 12px; border-radius:8px; font-size:.9rem;
-  }
-  select:focus, input:focus { outline:none; border-color:var(--accent); }
-  .btn { padding:8px 18px; border-radius:8px; border:none; cursor:pointer; font-size:.9rem; font-weight:500; transition:.15s; }
-  .btn-primary { background:var(--accent); color:#fff; }
-  .btn-primary:hover { background:#4752c4; }
-  .btn-danger  { background:var(--red); color:#fff; }
-  .btn-danger:hover { background:#c03537; }
-  .btn-sm { padding:5px 12px; font-size:.82rem; }
-  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  .row label { font-size:.88rem; color:var(--muted); min-width:120px; }
-
-  /* Toggle */
-  .toggle { position:relative; width:42px; height:24px; }
-  .toggle input { opacity:0; width:0; height:0; }
-  .toggle .slider { position:absolute; inset:0; background:var(--border); border-radius:12px; cursor:pointer; transition:.2s; }
-  .toggle .slider:before { content:''; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
-  .toggle input:checked + .slider { background:var(--accent2); }
-  .toggle input:checked + .slider:before { transform:translateX(18px); }
-
-  /* Table */
-  table { width:100%; border-collapse:collapse; font-size:.88rem; }
-  th { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); color:var(--muted); font-weight:500; }
-  td { padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
-  tr:last-child td { border-bottom:none; }
-  .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:.75rem; font-weight:600; }
-  .badge-yt  { background:#ff000033; color:#ff4444; }
-  .badge-tw  { background:#9146ff33; color:#b07aff; }
-  .badge-tt  { background:#ffffff18; color:#ccc; }
-
-  .tag { display:inline-block; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:3px 10px; font-size:.82rem; margin:2px; }
-  .success { color:var(--accent2); font-size:.85rem; margin-top:8px; min-height:18px; }
-  .status-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; }
-  .dot-online { background:#3ba55c; } .dot-idle { background:#faa61a; } .dot-dnd { background:#ed4245; }
-  .empty { color:var(--muted); font-size:.88rem; padding:16px 0; text-align:center; }
+:root{--bg:#0e0f13;--surface:#16181d;--surface2:#1e2029;--border:#2a2d38;--accent:#5865f2;--green:#3ba55c;--red:#ed4245;--yellow:#faa61a;--text:#e3e5e8;--muted:#72767d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;min-height:100vh}
+#login{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;width:340px;text-align:center}
+.login-box h1{font-size:1.4rem;margin-bottom:8px}.login-box p{color:var(--muted);font-size:.9rem;margin-bottom:24px}
+.login-box input{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.95rem;margin-bottom:12px}
+.login-box input:focus{outline:none;border-color:var(--accent)}
+#login-err{color:var(--red);font-size:.85rem;margin-bottom:10px;min-height:18px}
+#app{display:none}
+.sidebar{position:fixed;top:0;left:0;width:220px;height:100vh;background:var(--surface);border-right:1px solid var(--border);padding:20px 12px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+.sidebar .logo{font-size:1.1rem;font-weight:700;padding:8px 12px 20px;color:var(--accent)}
+.nav-item{padding:10px 12px;border-radius:8px;cursor:pointer;font-size:.9rem;color:var(--muted);transition:.15s;display:flex;align-items:center;gap:10px}
+.nav-item:hover{background:var(--surface2);color:var(--text)}.nav-item.active{background:var(--accent);color:#fff}
+.main{margin-left:220px;padding:32px;max-width:1000px}
+.page{display:none}.page.active{display:block}
+h1.ptitle{font-size:1.4rem;margin-bottom:24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.card .label{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.card .value{font-size:1.8rem;font-weight:700}.card .sub{font-size:.82rem;color:var(--muted);margin-top:4px}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:20px}
+.section h2{font-size:1rem;font-weight:600;margin-bottom:18px}
+select,input[type=text],input[type=password],input[type=url],textarea{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:.9rem}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+textarea{width:100%;resize:vertical;min-height:80px;font-family:inherit}
+.btn{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:.9rem;font-weight:500;transition:.15s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#4752c4}
+.btn-danger{background:var(--red);color:#fff}.btn-danger:hover{background:#c03537}
+.btn-sm{padding:5px 12px;font-size:.82rem}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row label{font-size:.88rem;color:var(--muted);min-width:130px}
+.toggle{position:relative;width:42px;height:24px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:var(--border);border-radius:12px;cursor:pointer;transition:.2s}
+.toggle .slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:var(--green)}.toggle input:checked+.slider:before{transform:translateX(18px)}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-weight:500}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.75rem;font-weight:600}
+.badge-yt{background:#ff000033;color:#ff4444}.badge-tw{background:#9146ff33;color:#b07aff}.badge-tt{background:#ffffff18;color:#ccc}
+.tag{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:.82rem;margin:2px}
+.tag .x{cursor:pointer;color:var(--muted);font-size:.9rem;line-height:1}.tag .x:hover{color:var(--red)}
+.tag-cloud{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;min-height:36px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.success{color:var(--green);font-size:.85rem;min-height:18px}
+.empty{color:var(--muted);font-size:.88rem;padding:16px 0;text-align:center}
+.status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px}
+.dot-online{background:#3ba55c}.dot-idle{background:#faa61a}.dot-dnd{background:#ed4245}
+.guild-sel{margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.guild-sel label{font-size:.88rem;color:var(--muted)}
+/* Embed Preview */
+.embed-wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:700px){.embed-wrap{grid-template-columns:1fr}}
+.embed-form{display:flex;flex-direction:column;gap:12px}
+.embed-form label{font-size:.82rem;color:var(--muted);margin-bottom:2px;display:block}
+.embed-preview-box{background:#36393f;border-radius:8px;padding:16px;min-height:100px}
+.ep-label{font-size:.75rem;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
+.discord-embed{display:flex;gap:12px;background:#2f3136;border-radius:0 4px 4px 0;padding:12px 16px;border-left:4px solid #5865f2;max-width:100%}
+.discord-embed .embed-content{flex:1;min-width:0}
+.discord-embed .embed-title{font-weight:600;font-size:.95rem;color:#fff;margin-bottom:6px;word-break:break-word}
+.discord-embed .embed-desc{font-size:.875rem;color:#dcddde;white-space:pre-wrap;word-break:break-word}
+.discord-embed .embed-img{max-width:100%;border-radius:4px;margin-top:8px}
+.discord-embed .embed-thumb{width:80px;height:80px;object-fit:cover;border-radius:4px;flex-shrink:0}
+.discord-embed .embed-footer{font-size:.75rem;color:#a3a6aa;margin-top:8px}
+.discord-embed-plain{font-size:.9rem;color:#dcddde;margin-bottom:6px;word-break:break-word}
+.prefix-badge{display:inline-block;background:var(--accent);color:#fff;border-radius:4px;padding:2px 7px;font-size:.75rem;font-weight:600;margin-right:6px}
+input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:none;padding:2px}
 </style>
 </head>
 <body>
 
-<!-- Login -->
 <div id="login">
   <div class="login-box">
     <h1>🤖 Bot Dashboard</h1>
@@ -97,264 +88,433 @@
   </div>
 </div>
 
-<!-- App -->
 <div id="app">
   <nav class="sidebar">
     <div class="logo">🤖 Dashboard</div>
-    <div class="nav-item active" onclick="nav('overview')">📊 Übersicht</div>
-    <div class="nav-item" onclick="nav('status')">🎮 Bot-Status</div>
-    <div class="nav-item" onclick="nav('automod')">🛡️ Automod</div>
-    <div class="nav-item" onclick="nav('warnings')">⚠️ Verwarnungen</div>
-    <div class="nav-item" onclick="nav('tickets')">🎫 Tickets</div>
-    <div class="nav-item" onclick="nav('social')">📡 Social Media</div>
+    <div class="nav-item active" onclick="nav('overview',this)">📊 Übersicht</div>
+    <div class="nav-item" onclick="nav('status',this)">🎮 Bot-Status</div>
+    <div class="nav-item" onclick="nav('automod',this)">🛡️ Automod</div>
+    <div class="nav-item" onclick="nav('embed',this)">📝 Embed Builder</div>
+    <div class="nav-item" onclick="nav('tickets',this)">🎫 Tickets</div>
+    <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
+    <div class="nav-item" onclick="nav('warnings',this)">⚠️ Verwarnungen</div>
   </nav>
   <main class="main">
 
     <!-- Übersicht -->
     <div id="page-overview" class="page active">
-      <h1 style="font-size:1.4rem;margin-bottom:24px">Übersicht</h1>
+      <h1 class="ptitle">Übersicht</h1>
       <div class="grid">
         <div class="card"><div class="label">Bot</div><div class="value" id="ov-tag" style="font-size:1.1rem;margin-top:4px">–</div></div>
         <div class="card"><div class="label">Server</div><div class="value" id="ov-guilds">–</div></div>
         <div class="card"><div class="label">User gesamt</div><div class="value" id="ov-users">–</div></div>
         <div class="card"><div class="label">Uptime</div><div class="value" id="ov-uptime" style="font-size:1.1rem;margin-top:4px">–</div></div>
       </div>
-      <div class="section">
-        <h2>Aktueller Status</h2>
-        <div id="ov-status" style="font-size:.95rem">–</div>
-      </div>
+      <div class="section"><h2>Aktueller Status</h2><div id="ov-status">–</div></div>
     </div>
 
     <!-- Bot-Status -->
     <div id="page-status" class="page">
-      <h1 style="font-size:1.4rem;margin-bottom:24px">Bot-Status setzen</h1>
+      <h1 class="ptitle">Bot-Status</h1>
       <div class="section">
         <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="row"><label>Online-Status</label>
+            <select id="s-online"><option value="online">🟢 Online</option><option value="idle">🟡 Idle</option><option value="dnd">🔴 Do Not Disturb</option></select>
+          </div>
           <div class="row"><label>Aktivitätstyp</label>
-            <select id="s-typ">
-              <option value="watching">👀 Watching</option>
-              <option value="playing">🎮 Playing</option>
-              <option value="listening">🎧 Listening</option>
-              <option value="competing">🏆 Competing</option>
-            </select>
+            <select id="s-typ"><option value="watching">👀 Watching</option><option value="playing">🎮 Playing</option><option value="listening">🎧 Listening</option><option value="competing">🏆 Competing</option></select>
           </div>
           <div class="row"><label>Statustext</label>
-            <input type="text" id="s-text" placeholder="z.B. /help | discord.gg/..." style="width:300px">
-          </div>
-          <div class="row"><label>Online-Status</label>
-            <select id="s-online">
-              <option value="online">🟢 Online</option>
-              <option value="idle">🟡 Idle</option>
-              <option value="dnd">🔴 Do Not Disturb</option>
-            </select>
+            <input type="text" id="s-text" placeholder="Leer lassen für keinen Aktivitätsstatus" style="width:300px">
           </div>
           <div><button class="btn btn-primary" onclick="saveStatus()">✅ Speichern</button>
-          <span class="success" id="status-msg"></span></div>
+          <span class="success" id="status-msg" style="margin-left:12px"></span></div>
         </div>
       </div>
     </div>
 
     <!-- Automod -->
     <div id="page-automod" class="page">
-      <h1 style="font-size:1.4rem;margin-bottom:24px">Automod</h1>
-      <div id="automod-content"><div class="empty">Laden...</div></div>
+      <h1 class="ptitle">Automod</h1>
+      <div class="guild-sel"><label>Server:</label><select id="am-guild" onchange="loadAutomod()"></select></div>
+      <div id="automod-content"><div class="empty">Server auswählen...</div></div>
     </div>
 
-    <!-- Warnings -->
-    <div id="page-warnings" class="page">
-      <h1 style="font-size:1.4rem;margin-bottom:24px">Verwarnungen</h1>
-      <div id="warnings-content"><div class="empty">Laden...</div></div>
+    <!-- Embed Builder -->
+    <div id="page-embed" class="page">
+      <h1 class="ptitle">Embed Builder</h1>
+      <div class="section">
+        <div class="row" style="margin-bottom:16px">
+          <label>Server:</label><select id="emb-guild" onchange="loadEmbedChannels()"></select>
+          <label style="margin-left:16px">Channel:</label><select id="emb-channel"></select>
+        </div>
+        <div class="embed-wrap">
+          <div class="embed-form">
+            <div><label>Nachricht über dem Embed (optional)</label><input type="text" id="emb-content" placeholder="z.B. @everyone" style="width:100%" oninput="updatePreview()"></div>
+            <div><label>Titel</label><input type="text" id="emb-title" placeholder="Embed-Titel" style="width:100%" oninput="updatePreview()"></div>
+            <div><label>Beschreibung (\\n = Zeilenumbruch)</label><textarea id="emb-desc" placeholder="Beschreibungstext..." oninput="updatePreview()"></textarea></div>
+            <div class="row"><label>Farbe</label><input type="color" id="emb-color" value="#5865f2" oninput="updatePreview()"></div>
+            <div><label>Bild-URL (groß)</label><input type="url" id="emb-img" placeholder="https://..." style="width:100%" oninput="updatePreview()"></div>
+            <div><label>Thumbnail-URL (klein, rechts)</label><input type="url" id="emb-thumb" placeholder="https://..." style="width:100%" oninput="updatePreview()"></div>
+            <div><label>Footer-Text</label><input type="text" id="emb-footer" placeholder="Footer..." style="width:100%" oninput="updatePreview()"></div>
+            <div><button class="btn btn-primary" onclick="sendEmbed()">📤 Senden</button>
+            <span class="success" id="emb-msg" style="margin-left:12px"></span></div>
+          </div>
+          <div>
+            <div class="ep-label">Live-Vorschau</div>
+            <div class="embed-preview-box">
+              <div id="embed-plain-preview" class="discord-embed-plain" style="display:none"></div>
+              <div id="embed-preview-wrap" class="discord-embed">
+                <div class="embed-content">
+                  <div class="embed-title" id="ep-title" style="display:none"></div>
+                  <div class="embed-desc" id="ep-desc" style="display:none"></div>
+                  <img class="embed-img" id="ep-img" style="display:none" alt="">
+                  <div class="embed-footer" id="ep-footer" style="display:none"></div>
+                </div>
+                <img class="embed-thumb" id="ep-thumb" style="display:none" alt="">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Tickets -->
     <div id="page-tickets" class="page">
-      <h1 style="font-size:1.4rem;margin-bottom:24px">Aktive Tickets</h1>
-      <div id="tickets-content"><div class="empty">Laden...</div></div>
+      <h1 class="ptitle">Tickets</h1>
+      <div class="guild-sel"><label>Server:</label><select id="tk-guild" onchange="loadTickets()"></select></div>
+      <div id="tickets-content"><div class="empty">Server auswählen...</div></div>
     </div>
 
     <!-- Social -->
     <div id="page-social" class="page">
-      <h1 style="font-size:1.4rem;margin-bottom:24px">Social Media Notifications</h1>
-      <div id="social-content"><div class="empty">Laden...</div></div>
+      <h1 class="ptitle">Social Media</h1>
+      <div class="guild-sel"><label>Server:</label><select id="soc-guild" onchange="loadSocial()"></select></div>
+      <div id="social-content"><div class="empty">Server auswählen...</div></div>
+    </div>
+
+    <!-- Warnings -->
+    <div id="page-warnings" class="page">
+      <h1 class="ptitle">Verwarnungen</h1>
+      <div class="guild-sel"><label>Server:</label><select id="warn-guild" onchange="loadWarnings()"></select></div>
+      <div id="warnings-content"><div class="empty">Server auswählen...</div></div>
     </div>
 
   </main>
 </div>
 
 <script>
-let TOKEN = '';
-let guilds = {};
+let TOKEN='', guilds={}, chCache={}, roleCache={};
 
-function doLogin() {
-  TOKEN = document.getElementById('token-input').value.trim();
-  fetch('/api/stats', { headers: { authorization: TOKEN } }).then(r => {
-    if (r.status === 401) { document.getElementById('login-err').textContent = 'Falscher Token.'; TOKEN = ''; return; }
-    localStorage.setItem('dash_token', TOKEN);
-    document.getElementById('login').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    loadAll();
+function doLogin(){
+  TOKEN=document.getElementById('token-input').value.trim();
+  fetch('/api/stats',{headers:{authorization:TOKEN}}).then(r=>{
+    if(r.status===401){document.getElementById('login-err').textContent='Falscher Token.';TOKEN='';return;}
+    localStorage.setItem('dash_token',TOKEN);
+    document.getElementById('login').style.display='none';
+    document.getElementById('app').style.display='block';
+    init();
   });
 }
-document.getElementById('token-input').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+document.getElementById('token-input').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+const saved=localStorage.getItem('dash_token');
+if(saved){TOKEN=saved;fetch('/api/stats',{headers:{authorization:TOKEN}}).then(r=>{
+  if(r.ok){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';init();}
+  else{localStorage.removeItem('dash_token');}
+});}
 
-// Auto-login wenn Token gespeichert
-const saved = localStorage.getItem('dash_token');
-if (saved) { TOKEN = saved; fetch('/api/stats',{headers:{authorization:TOKEN}}).then(r=>{ if(r.ok){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';loadAll();}else{localStorage.removeItem('dash_token');} }); }
-
-async function api(path, opts={}) {
-  const r = await fetch(path, { ...opts, headers: { authorization: TOKEN, 'content-type':'application/json', ...(opts.headers||{}) } });
+async function api(path,opts={}){
+  const r=await fetch(path,{...opts,headers:{authorization:TOKEN,'content-type':'application/json',...(opts.headers||{})}});
   return r.json();
 }
 
-function nav(page) {
+function nav(page,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
-  event.target.classList.add('active');
-  if (page==='overview')  loadOverview();
-  if (page==='automod')   loadAutomod();
-  if (page==='warnings')  loadWarnings();
-  if (page==='tickets')   loadTickets();
-  if (page==='social')    loadSocial();
-  if (page==='status')    loadStatus();
+  if(el)el.classList.add('active');
+  if(page==='overview')loadOverview();
+  if(page==='status')loadStatus();
+  if(page==='automod')populateGuildSel('am-guild');
+  if(page==='embed'){populateGuildSel('emb-guild');loadEmbedChannels();}
+  if(page==='tickets')populateGuildSel('tk-guild');
+  if(page==='social')populateGuildSel('soc-guild');
+  if(page==='warnings')populateGuildSel('warn-guild');
 }
 
-function fmt(sec) {
-  const d=Math.floor(sec/86400), h=Math.floor((sec%86400)/3600), m=Math.floor((sec%3600)/60);
-  return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;
-}
+function fmt(sec){const d=Math.floor(sec/86400),h=Math.floor((sec%86400)/3600),m=Math.floor((sec%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
 
-async function loadAll() {
-  guilds = await api('/api/guilds');
+async function init(){
+  guilds=await api('/api/guilds');
   loadOverview();
 }
 
-async function loadOverview() {
-  const s = await api('/api/stats');
-  document.getElementById('ov-tag').textContent = s.tag;
-  document.getElementById('ov-guilds').textContent = s.guilds;
-  document.getElementById('ov-users').textContent = s.users.toLocaleString();
-  document.getElementById('ov-uptime').textContent = fmt(s.uptime);
-  const bs = s.botstatus;
-  const dotClass = {online:'dot-online',idle:'dot-idle',dnd:'dot-dnd'}[bs.status]||'dot-online';
-  document.getElementById('ov-status').innerHTML =
-    `<span class="status-dot ${dotClass}"></span><strong>${bs.typ}</strong> ${bs.text} &nbsp;<span style="color:var(--muted)">(${bs.status})</span>`;
+function populateGuildSel(selId){
+  const sel=document.getElementById(selId);
+  if(!sel)return;
+  const prev=sel.value;
+  sel.innerHTML=Object.entries(guilds).map(([id,g])=>`<option value="${id}">${g.name}</option>`).join('');
+  if(prev&&sel.querySelector(`option[value="${prev}"]`))sel.value=prev;
 }
 
-async function loadStatus() {
-  const s = await api('/api/stats');
-  const bs = s.botstatus;
-  document.getElementById('s-typ').value    = bs.typ || 'watching';
-  document.getElementById('s-text').value   = bs.text || '';
-  document.getElementById('s-online').value = bs.status || 'online';
+async function loadGuildData(gid){
+  if(!chCache[gid])chCache[gid]=await api(`/api/guilds/${gid}/channels`);
+  if(!roleCache[gid])roleCache[gid]=await api(`/api/guilds/${gid}/roles`);
 }
 
-async function saveStatus() {
-  await api('/api/status', { method:'POST', body: JSON.stringify({
-    typ:    document.getElementById('s-typ').value,
-    text:   document.getElementById('s-text').value,
-    status: document.getElementById('s-online').value,
+function chName(gid,id){const ch=(chCache[gid]||[]).find(c=>c.id===id);return ch?`#${ch.name}`:id;}
+function roleName(gid,id){const r=(roleCache[gid]||[]).find(r=>r.id===id);return r?`@${r.name}`:id;}
+
+function chOptions(gid,sel=''){return(chCache[gid]||[]).map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>#${c.name}</option>`).join('');}
+function roleOptions(gid,sel=''){return(roleCache[gid]||[]).map(r=>`<option value="${r.id}"${r.id===sel?' selected':''}>${r.name}</option>`).join('');}
+
+// ── Übersicht ──────────────────────────────────────────────────────
+async function loadOverview(){
+  const s=await api('/api/stats');
+  document.getElementById('ov-tag').textContent=s.tag;
+  document.getElementById('ov-guilds').textContent=s.guilds;
+  document.getElementById('ov-users').textContent=s.users.toLocaleString();
+  document.getElementById('ov-uptime').textContent=fmt(s.uptime);
+  const bs=s.botstatus;
+  const dc={online:'dot-online',idle:'dot-idle',dnd:'dot-dnd'}[bs.status]||'dot-online';
+  document.getElementById('ov-status').innerHTML=
+    `<span class="status-dot ${dc}"></span><strong>${bs.typ}</strong> ${bs.text||'<em>kein Text</em>'} <span style="color:var(--muted)">(${bs.status})</span>`;
+}
+
+// ── Status ─────────────────────────────────────────────────────────
+async function loadStatus(){
+  const s=await api('/api/stats');const bs=s.botstatus;
+  document.getElementById('s-typ').value=bs.typ||'watching';
+  document.getElementById('s-text').value=bs.text||'';
+  document.getElementById('s-online').value=bs.status||'online';
+}
+async function saveStatus(){
+  await api('/api/status',{method:'POST',body:JSON.stringify({
+    typ:document.getElementById('s-typ').value,
+    text:document.getElementById('s-text').value||null,
+    status:document.getElementById('s-online').value,
   })});
-  const el = document.getElementById('status-msg');
-  el.textContent = '✅ Gespeichert!';
-  setTimeout(()=>el.textContent='', 2500);
-  loadOverview();
+  flash('status-msg','✅ Gespeichert!');loadOverview();
 }
 
-async function loadAutomod() {
-  const data = await api('/api/automod');
-  const el = document.getElementById('automod-content');
-  const guildIds = Object.keys(data);
-  if (!guildIds.length) { el.innerHTML='<div class="empty">Keine Automod-Konfigurationen gefunden.</div>'; return; }
-  el.innerHTML = guildIds.map(gId => {
-    const g = data[gId]; const name = guilds[gId]?.name || gId;
-    const words = (g.bannedWords||[]).map(w=>`<span class="tag">${w}</span>`).join('') || '<span style="color:var(--muted)">Keine</span>';
-    return `<div class="section">
-      <h2>${name}</h2>
+// ── Automod ────────────────────────────────────────────────────────
+async function loadAutomod(){
+  const gid=document.getElementById('am-guild').value;
+  if(!gid)return;
+  await loadGuildData(gid);
+  const data=await api('/api/automod');
+  const cfg=data[gid]||{enabled:false,blockInvites:true,blockSpam:true,action:'mute',bannedWords:[]};
+  const words=cfg.bannedWords||[];
+  document.getElementById('automod-content').innerHTML=`
+    <div class="section">
       <div style="display:flex;flex-direction:column;gap:14px">
         <div class="row"><label>Automod aktiv</label>
-          <label class="toggle"><input type="checkbox" ${g.enabled?'checked':''} onchange="patchAutomod('${gId}',{enabled:this.checked})"><span class="slider"></span></label>
+          <label class="toggle"><input type="checkbox" id="am-en" ${cfg.enabled?'checked':''} onchange="patchAm('${gid}',{enabled:this.checked})"><span class="slider"></span></label>
         </div>
         <div class="row"><label>Invite-Links blocken</label>
-          <label class="toggle"><input type="checkbox" ${g.blockInvites?'checked':''} onchange="patchAutomod('${gId}',{blockInvites:this.checked})"><span class="slider"></span></label>
+          <label class="toggle"><input type="checkbox" id="am-inv" ${cfg.blockInvites?'checked':''} onchange="patchAm('${gid}',{blockInvites:this.checked})"><span class="slider"></span></label>
         </div>
         <div class="row"><label>Spam-Schutz</label>
-          <label class="toggle"><input type="checkbox" ${g.blockSpam?'checked':''} onchange="patchAutomod('${gId}',{blockSpam:this.checked})"><span class="slider"></span></label>
+          <label class="toggle"><input type="checkbox" id="am-spam" ${cfg.blockSpam?'checked':''} onchange="patchAm('${gid}',{blockSpam:this.checked})"><span class="slider"></span></label>
         </div>
-        <div class="row"><label>Aktion</label>
-          <select onchange="patchAutomod('${gId}',{action:this.value})">
-            <option value="warn" ${g.action==='warn'?'selected':''}>Nur Warnen</option>
-            <option value="mute" ${g.action==='mute'?'selected':''}>Mute</option>
-            <option value="kick" ${g.action==='kick'?'selected':''}>Kick</option>
+        <div class="row"><label>Aktion bei Verstoß</label>
+          <select onchange="patchAm('${gid}',{action:this.value})">
+            <option value="warn" ${cfg.action==='warn'?'selected':''}>Nur Warnen</option>
+            <option value="mute" ${cfg.action==='mute'?'selected':''}>Mute</option>
+            <option value="kick" ${cfg.action==='kick'?'selected':''}>Kick</option>
           </select>
         </div>
-        <div class="row" style="align-items:flex-start"><label style="margin-top:4px">Verbotene Wörter</label>
-          <div>${words}</div>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <label style="color:var(--muted);font-size:.88rem">Verbotene Wörter (${words.length})</label>
+            <button class="btn btn-ghost btn-sm" onclick="resetWords('${gid}')">↺ Standard-Liste</button>
+          </div>
+          <div class="tag-cloud" id="word-cloud">${words.map(w=>`<span class="tag">${w}<span class="x" onclick="removeWord('${gid}','${w}')">✕</span></span>`).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>'}</div>
+          <div class="row" style="margin-top:10px">
+            <input type="text" id="new-word" placeholder="Neues Wort hinzufügen..." style="flex:1" onkeydown="if(event.key==='Enter')addWord('${gid}')">
+            <button class="btn btn-primary btn-sm" onclick="addWord('${gid}')">+ Hinzufügen</button>
+          </div>
+          <span class="success" id="am-msg" style="display:block;margin-top:6px"></span>
         </div>
       </div>
     </div>`;
-  }).join('');
+}
+async function patchAm(gid,patch){await api(`/api/automod/${gid}`,{method:'POST',body:JSON.stringify(patch)});flash('am-msg','✅ Gespeichert.');}
+async function addWord(gid){
+  const inp=document.getElementById('new-word');const w=inp.value.trim();if(!w)return;
+  const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'add',word:w})});
+  inp.value='';renderWords(gid,r.words);flash('am-msg','✅ Hinzugefügt.');
+}
+async function removeWord(gid,word){
+  const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'remove',word})});
+  renderWords(gid,r.words);
+}
+async function resetWords(gid){
+  if(!confirm('Wortliste auf Standard zurücksetzen?'))return;
+  const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'reset'})});
+  renderWords(gid,r.words);flash('am-msg',`✅ ${r.words.length} Standard-Wörter geladen.`);
+}
+function renderWords(gid,words){
+  const cloud=document.getElementById('word-cloud');if(!cloud)return;
+  cloud.innerHTML=words.map(w=>`<span class="tag">${w}<span class="x" onclick="removeWord('${gid}','${w}')">✕</span></span>`).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>';
 }
 
-async function patchAutomod(guildId, patch) {
-  await api(`/api/automod/${guildId}`, { method:'POST', body: JSON.stringify(patch) });
+// ── Embed Builder ─────────────────────────────────────────────────
+async function loadEmbedChannels(){
+  const gid=document.getElementById('emb-guild')?.value;if(!gid)return;
+  await loadGuildData(gid);
+  document.getElementById('emb-channel').innerHTML=chOptions(gid);
+}
+function updatePreview(){
+  const title=document.getElementById('emb-title').value;
+  const desc=document.getElementById('emb-desc').value.replace(/\\n/g,'\n');
+  const color=document.getElementById('emb-color').value;
+  const img=document.getElementById('emb-img').value;
+  const thumb=document.getElementById('emb-thumb').value;
+  const footer=document.getElementById('emb-footer').value;
+  const content=document.getElementById('emb-content').value;
+  document.getElementById('embed-preview-wrap').style.borderLeftColor=color;
+  const ep=el=>document.getElementById(el);
+  ep('ep-title').textContent=title;ep('ep-title').style.display=title?'block':'none';
+  ep('ep-desc').textContent=desc;ep('ep-desc').style.display=desc?'block':'none';
+  ep('ep-footer').textContent=footer?`${footer} • Heute`:footer;ep('ep-footer').style.display=footer?'block':'none';
+  if(img){ep('ep-img').src=img;ep('ep-img').style.display='block';}else ep('ep-img').style.display='none';
+  if(thumb){ep('ep-thumb').src=thumb;ep('ep-thumb').style.display='block';}else ep('ep-thumb').style.display='none';
+  const plain=ep('embed-plain-preview');plain.textContent=content;plain.style.display=content?'block':'none';
+}
+async function sendEmbed(){
+  const channelId=document.getElementById('emb-channel').value;
+  if(!channelId)return alert('Keinen Channel ausgewählt.');
+  const body={channelId,title:document.getElementById('emb-title').value,description:document.getElementById('emb-desc').value,
+    color:document.getElementById('emb-color').value,imageUrl:document.getElementById('emb-img').value,
+    thumbnailUrl:document.getElementById('emb-thumb').value,footer:document.getElementById('emb-footer').value,
+    content:document.getElementById('emb-content').value};
+  const r=await api('/api/embed',{method:'POST',body:JSON.stringify(body)});
+  if(r.ok)flash('emb-msg','✅ Gesendet!');else alert('Fehler: '+r.error);
 }
 
-async function loadWarnings() {
-  const data = await api('/api/warnings');
-  const el = document.getElementById('warnings-content');
-  let html = '';
-  for (const [gId, users] of Object.entries(data)) {
-    const name = guilds[gId]?.name || gId;
-    const rows = Object.entries(users).map(([uid, warns]) =>
-      `<tr><td><code>${uid}</code></td><td>${warns.length}</td><td>${warns.map(w=>`<div style="font-size:.8rem">${w.reason}</div>`).join('')}</td>
-       <td><button class="btn btn-danger btn-sm" onclick="deleteWarnings('${gId}','${uid}')">Löschen</button></td></tr>`
-    ).join('');
-    if (!rows) continue;
-    html += `<div class="section"><h2>${name}</h2><table>
-      <tr><th>User-ID</th><th>Anzahl</th><th>Gründe</th><th></th></tr>${rows}</table></div>`;
-  }
-  el.innerHTML = html || '<div class="empty">Keine Verwarnungen vorhanden.</div>';
+// ── Tickets ────────────────────────────────────────────────────────
+async function loadTickets(){
+  const gid=document.getElementById('tk-guild').value;if(!gid)return;
+  await loadGuildData(gid);
+  const data=await api('/api/tickets');
+  const cfg=data[gid]||{categoryId:'',supportRoleId:'',categories:[]};
+  const cats=cfg.categories||[];
+  document.getElementById('tickets-content').innerHTML=`
+    <div class="section"><h2>Konfiguration</h2>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="row"><label>Support-Rolle</label>
+          <select id="tk-role">${roleOptions(gid,cfg.supportRoleId)}</select>
+        </div>
+        <div><button class="btn btn-primary btn-sm" onclick="saveTicketConfig('${gid}')">Speichern</button>
+        <span class="success" id="tk-msg" style="margin-left:10px"></span></div>
+      </div>
+    </div>
+    <div class="section"><h2>Ticket-Kategorien (für Dropdown-Menü)</h2>
+      <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Füge Kategorien hinzu, dann poste das Panel neu mit /ticket-setup. Ohne Kategorien erscheint ein einfacher Button.</p>
+      <table><tr><th>Prefix</th><th>Label</th><th>Beschreibung</th><th></th></tr>
+      ${cats.map(c=>`<tr><td><span class="prefix-badge">${c.prefix}</span></td><td>${c.label}</td><td style="color:var(--muted)">${c.description||'–'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="removeCat('${gid}','${c.prefix}')">✕</button></td></tr>`).join('')||
+        '<tr><td colspan="4" class="empty">Keine Kategorien – Bot benutzt einfachen Button</td></tr>'}
+      </table>
+      <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+        <input type="text" id="cat-prefix" placeholder="Prefix (z.B. k)" style="width:90px" maxlength="4">
+        <input type="text" id="cat-label" placeholder="Label (z.B. Kooperation)" style="flex:1;min-width:140px">
+        <input type="text" id="cat-desc" placeholder="Beschreibung (optional)" style="flex:1;min-width:140px">
+        <button class="btn btn-primary btn-sm" onclick="addCat('${gid}')">+ Hinzufügen</button>
+      </div>
+      <span class="success" id="cat-msg" style="display:block;margin-top:6px"></span>
+    </div>`;
+}
+async function saveTicketConfig(gid){
+  await api(`/api/tickets/${gid}/config`,{method:'POST',body:JSON.stringify({supportRoleId:document.getElementById('tk-role').value})});
+  flash('tk-msg','✅ Gespeichert.');
+}
+async function addCat(gid){
+  const prefix=document.getElementById('cat-prefix').value.trim();
+  const label=document.getElementById('cat-label').value.trim();
+  const description=document.getElementById('cat-desc').value.trim();
+  if(!prefix||!label)return alert('Prefix und Label sind Pflichtfelder.');
+  await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description})});
+  document.getElementById('cat-prefix').value='';document.getElementById('cat-label').value='';document.getElementById('cat-desc').value='';
+  loadTickets();
+}
+async function removeCat(gid,prefix){
+  await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix})});
+  loadTickets();
 }
 
-async function deleteWarnings(gId, uid) {
-  await api(`/api/warnings/${gId}/${uid}`, { method:'DELETE' });
-  loadWarnings();
+// ── Social Media ───────────────────────────────────────────────────
+async function loadSocial(){
+  const gid=document.getElementById('soc-guild').value;if(!gid)return;
+  await loadGuildData(gid);
+  const data=await api('/api/social');
+  const entries=data[gid]||[];
+  const badgeCls={youtube:'badge-yt',twitch:'badge-tw',tiktok:'badge-tt'};
+  document.getElementById('social-content').innerHTML=`
+    <div class="section"><h2>Aktive Benachrichtigungen</h2>
+      ${entries.length?`<table><tr><th>Plattform</th><th>Handle/ID</th><th>Discord-Channel</th><th></th></tr>
+      ${entries.map(e=>`<tr><td><span class="badge ${badgeCls[e.platform]||''}">${e.platform}</span></td>
+        <td>${e.handle}</td><td>${chName(gid,e.channelId)}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="removeSocial('${gid}','${e.platform}','${e.handle}')">✕</button></td></tr>`).join('')}
+      </table>`:'<div class="empty">Keine Benachrichtigungen aktiv.</div>'}
+    </div>
+    <div class="section"><h2>Neue Benachrichtigung</h2>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="row"><label>Plattform</label>
+          <select id="soc-platform">
+            <option value="youtube">YouTube</option>
+            <option value="twitch">Twitch</option>
+            <option value="tiktok">TikTok</option>
+          </select>
+        </div>
+        <div class="row"><label>Handle / ID</label>
+          <input type="text" id="soc-handle" placeholder="YouTube: UCxxx... | Twitch/TikTok: @username" style="width:300px">
+        </div>
+        <div class="row"><label>Discord-Channel</label>
+          <select id="soc-channel">${chOptions(gid)}</select>
+        </div>
+        <div class="row"><label>Custom Nachricht</label>
+          <input type="text" id="soc-msg" placeholder="{name} hat etwas gepostet! (optional)" style="width:300px">
+        </div>
+        <div><button class="btn btn-primary" onclick="addSocial('${gid}')">+ Hinzufügen</button>
+        <span class="success" id="soc-success" style="margin-left:12px"></span></div>
+      </div>
+    </div>`;
+}
+async function addSocial(gid){
+  const platform=document.getElementById('soc-platform').value;
+  const handle=document.getElementById('soc-handle').value.trim();
+  const channelId=document.getElementById('soc-channel').value;
+  const message=document.getElementById('soc-msg').value.trim();
+  if(!handle)return alert('Handle/ID eingeben.');
+  await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'add',platform,handle,channelId,message:message||null})});
+  flash('soc-success','✅ Hinzugefügt.');loadSocial();
+}
+async function removeSocial(gid,platform,handle){
+  await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'remove',platform,handle})});
+  loadSocial();
 }
 
-async function loadTickets() {
-  const data = await api('/api/tickets');
-  const el = document.getElementById('tickets-content');
-  let html = '';
-  for (const [gId, tickets] of Object.entries(data)) {
-    const name = guilds[gId]?.name || gId;
-    const rows = Object.entries(tickets).map(([chId, t]) =>
-      `<tr><td><code>${chId}</code></td><td><code>${t.userId}</code></td><td>${new Date(t.openedAt).toLocaleString('de-DE')}</td></tr>`
-    ).join('');
-    if (!rows) continue;
-    html += `<div class="section"><h2>${name}</h2><table>
-      <tr><th>Channel-ID</th><th>User-ID</th><th>Geöffnet</th></tr>${rows}</table></div>`;
-  }
-  el.innerHTML = html || '<div class="empty">Keine offenen Tickets.</div>';
+// ── Warnings ───────────────────────────────────────────────────────
+async function loadWarnings(){
+  const gid=document.getElementById('warn-guild').value;if(!gid)return;
+  const data=await api('/api/warnings');
+  const users=data[gid]||{};
+  const rows=Object.entries(users).map(([uid,warns])=>`
+    <tr><td><code>${uid}</code></td><td>${warns.length}</td>
+    <td>${warns.map(w=>`<div style="font-size:.8rem;color:var(--muted)">${w.reason}</div>`).join('')}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="delWarn('${gid}','${uid}')">Löschen</button></td></tr>`).join('');
+  document.getElementById('warnings-content').innerHTML=rows
+    ?`<div class="section"><table><tr><th>User-ID</th><th>Anzahl</th><th>Gründe</th><th></th></tr>${rows}</table></div>`
+    :'<div class="empty">Keine Verwarnungen.</div>';
+}
+async function delWarn(gid,uid){
+  await api(`/api/warnings/${gid}/${uid}`,{method:'DELETE'});loadWarnings();
 }
 
-async function loadSocial() {
-  const data = await api('/api/social');
-  const el = document.getElementById('social-content');
-  let html = '';
-  const badgeClass = { youtube:'badge-yt', twitch:'badge-tw', tiktok:'badge-tt' };
-  for (const [gId, entries] of Object.entries(data)) {
-    if (!entries.length) continue;
-    const name = guilds[gId]?.name || gId;
-    const rows = entries.map(e =>
-      `<tr><td><span class="badge ${badgeClass[e.platform]||''}">${e.platform}</span></td>
-       <td>${e.handle}</td><td><code>${e.channelId}</code></td></tr>`
-    ).join('');
-    html += `<div class="section"><h2>${name}</h2><table>
-      <tr><th>Plattform</th><th>Kanal/Username</th><th>Discord-Channel</th></tr>${rows}</table></div>`;
-  }
-  el.innerHTML = html || '<div class="empty">Keine Social-Media-Beobachtungen aktiv.</div>';
-}
+// ── Helpers ────────────────────────────────────────────────────────
+function flash(id,msg){const el=document.getElementById(id);if(!el)return;el.textContent=msg;setTimeout(()=>el.textContent='',2500);}
 </script>
 </body>
 </html>
