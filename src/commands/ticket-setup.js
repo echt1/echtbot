@@ -5,13 +5,13 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('ticket-setup')
     .setDescription('Postet das Ticket-Panel mit Öffnen-Button in diesen Channel')
-    .addStringOption(opt => opt.setName('titel').setDescription('Titel des Panels').setRequired(false))
-    .addStringOption(opt => opt.setName('beschreibung').setDescription('Beschreibungstext').setRequired(false))
     .addChannelOption(opt =>
       opt.setName('kategorie').setDescription('Kategorie, in der neue Ticket-Channels erstellt werden')
         .addChannelTypes(ChannelType.GuildCategory).setRequired(true)
     )
     .addRoleOption(opt => opt.setName('support_rolle').setDescription('Rolle die Zugriff auf Tickets bekommt').setRequired(true))
+    .addStringOption(opt => opt.setName('titel').setDescription('Titel des Panels').setRequired(false))
+    .addStringOption(opt => opt.setName('beschreibung').setDescription('Beschreibungstext').setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(interaction) {
