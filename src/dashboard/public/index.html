@@ -157,6 +157,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
             <div><label>Bild-URL (groß)</label><input type="url" id="emb-img" placeholder="https://..." style="width:100%" oninput="updatePreview()"></div>
             <div><label>Thumbnail-URL (klein, rechts)</label><input type="url" id="emb-thumb" placeholder="https://..." style="width:100%" oninput="updatePreview()"></div>
             <div><label>Footer-Text</label><input type="text" id="emb-footer" placeholder="Footer..." style="width:100%" oninput="updatePreview()"></div>
+            <div class="row"><label>Timestamp anzeigen</label><label class="toggle"><input type="checkbox" id="emb-ts" checked><span class="slider"></span></label></div>
             <div><button class="btn btn-primary" onclick="sendEmbed()">📤 Senden</button>
             <span class="success" id="emb-msg" style="margin-left:12px"></span></div>
           </div>
@@ -245,7 +246,8 @@ function nav(page,el){
 function fmt(sec){const d=Math.floor(sec/86400),h=Math.floor((sec%86400)/3600),m=Math.floor((sec%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
 
 async function init(){
-  guilds=await api('/api/guilds');
+  guilds=await api("/api/guilds");
+  ["am-guild","tk-guild","soc-guild","warn-guild","emb-guild"].forEach(id=>populateGuildSel(id));
   loadOverview();
 }
 
@@ -253,7 +255,7 @@ function populateGuildSel(selId){
   const sel=document.getElementById(selId);
   if(!sel)return;
   const prev=sel.value;
-  sel.innerHTML=Object.entries(guilds).map(([id,g])=>`<option value="${id}">${g.name}</option>`).join('');
+  sel.innerHTML=Object.entries(guilds).map(([id,g])=>`<option value="${id}">${g.name}</option>`).join("");
   if(prev&&sel.querySelector(`option[value="${prev}"]`))sel.value=prev;
 }
 
@@ -388,7 +390,7 @@ async function sendEmbed(){
   const body={channelId,title:document.getElementById('emb-title').value,description:document.getElementById('emb-desc').value,
     color:document.getElementById('emb-color').value,imageUrl:document.getElementById('emb-img').value,
     thumbnailUrl:document.getElementById('emb-thumb').value,footer:document.getElementById('emb-footer').value,
-    content:document.getElementById('emb-content').value};
+    content:document.getElementById('emb-content').value,timestamp:document.getElementById('emb-ts')?.checked!==false};
   const r=await api('/api/embed',{method:'POST',body:JSON.stringify(body)});
   if(r.ok)flash('emb-msg','✅ Gesendet!');else alert('Fehler: '+r.error);
 }
