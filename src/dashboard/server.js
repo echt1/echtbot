@@ -101,7 +101,7 @@ function startDashboard(client) {
     res.json(guilds);
   });
 
-  app.listen(PORT, () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
+  app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
 }
 
 module.exports = { startDashboard };
