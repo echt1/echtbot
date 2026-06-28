@@ -171,7 +171,7 @@ function startDashboard(client) {
 
   // ── Embed ──────────────────────────────────────────────────────────
   app.post('/api/embed', auth, async (req, res) => {
-    const { channelId, title, description, color, imageUrl, thumbnailUrl, footer, content } = req.body;
+    const { channelId, title, description, color, imageUrl, thumbnailUrl, footer, content, timestamp } = req.body;
     try {
       const ch = await client.channels.fetch(channelId).catch(() => null);
       if (!ch) return res.status(404).json({ error: 'Channel nicht gefunden' });
@@ -181,6 +181,7 @@ function startDashboard(client) {
       if (imageUrl)     embed.setImage(imageUrl);
       if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
       if (footer)       embed.setFooter({ text: footer });
+      if (timestamp !== false) embed.setTimestamp();
       await ch.send({ content: content || undefined, embeds: [embed] });
       res.json({ ok: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
