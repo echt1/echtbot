@@ -136,8 +136,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <!-- Automod -->
     <div id="page-automod" class="page">
       <h1 class="ptitle">Automod</h1>
-      <div class="guild-sel"><label>Server:</label><select id="am-guild" onchange="loadAutomod()"></select></div>
-      <div id="automod-content"><div class="empty">Server auswählen...</div></div>
+      <div id="automod-content"><div class="empty">Laden...</div></div>
     </div>
 
     <!-- Embed Builder -->
@@ -145,8 +144,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
       <h1 class="ptitle">Embed Builder</h1>
       <div class="section">
         <div class="row" style="margin-bottom:16px">
-          <label>Server:</label><select id="emb-guild" onchange="loadEmbedChannels()"></select>
-          <label style="margin-left:16px">Channel:</label><select id="emb-channel"></select>
+          <label>Channel:</label><select id="emb-channel"></select>
         </div>
         <div class="embed-wrap">
           <div class="embed-form">
@@ -183,29 +181,26 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <!-- Tickets -->
     <div id="page-tickets" class="page">
       <h1 class="ptitle">Tickets</h1>
-      <div class="guild-sel"><label>Server:</label><select id="tk-guild" onchange="loadTickets()"></select></div>
-      <div id="tickets-content"><div class="empty">Server auswählen...</div></div>
+      <div id="tickets-content"><div class="empty">Laden...</div></div>
     </div>
 
     <!-- Social -->
     <div id="page-social" class="page">
       <h1 class="ptitle">Social Media</h1>
-      <div class="guild-sel"><label>Server:</label><select id="soc-guild" onchange="loadSocial()"></select></div>
-      <div id="social-content"><div class="empty">Server auswählen...</div></div>
+      <div id="social-content"><div class="empty">Laden...</div></div>
     </div>
 
     <!-- Warnings -->
     <div id="page-warnings" class="page">
       <h1 class="ptitle">Verwarnungen</h1>
-      <div class="guild-sel"><label>Server:</label><select id="warn-guild" onchange="loadWarnings()"></select></div>
-      <div id="warnings-content"><div class="empty">Server auswählen...</div></div>
+      <div id="warnings-content"><div class="empty">Laden...</div></div>
     </div>
 
   </main>
 </div>
 
 <script>
-let TOKEN='', guilds={}, chCache={}, roleCache={};
+let TOKEN='', guilds={}, chCache={}, roleCache={}, currentGuild=null;
 
 function doLogin(){
   TOKEN=document.getElementById('token-input').value.trim();
@@ -236,28 +231,21 @@ function nav(page,el){
   if(el)el.classList.add('active');
   if(page==='overview')loadOverview();
   if(page==='status')loadStatus();
-  if(page==='automod')populateGuildSel('am-guild');
-  if(page==='embed'){populateGuildSel('emb-guild');loadEmbedChannels();}
-  if(page==='tickets')populateGuildSel('tk-guild');
-  if(page==='social')populateGuildSel('soc-guild');
-  if(page==='warnings')populateGuildSel('warn-guild');
+  if(page==='automod')loadAutomod();
+  if(page==='embed')loadEmbedChannels();
+  if(page==='tickets')loadTickets();
+  if(page==='social')loadSocial();
+  if(page==='warnings')loadWarnings();
 }
 
 function fmt(sec){const d=Math.floor(sec/86400),h=Math.floor((sec%86400)/3600),m=Math.floor((sec%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
 
 async function init(){
   guilds=await api("/api/guilds");
-  ["am-guild","tk-guild","soc-guild","warn-guild","emb-guild"].forEach(id=>populateGuildSel(id));
+  currentGuild=Object.keys(guilds)[0]||null;
   loadOverview();
 }
 
-function populateGuildSel(selId){
-  const sel=document.getElementById(selId);
-  if(!sel)return;
-  const prev=sel.value;
-  sel.innerHTML=Object.entries(guilds).map(([id,g])=>`<option value="${id}">${g.name}</option>`).join("");
-  if(prev&&sel.querySelector(`option[value="${prev}"]`))sel.value=prev;
-}
 
 async function loadGuildData(gid){
   if(!chCache[gid])chCache[gid]=await api(`/api/guilds/${gid}/channels`);
@@ -301,8 +289,7 @@ async function saveStatus(){
 
 // ── Automod ────────────────────────────────────────────────────────
 async function loadAutomod(){
-  const gid=document.getElementById('am-guild').value;
-  if(!gid)return;
+  const gid=firstGuild();if(!gid)return;
   await loadGuildData(gid);
   const data=await api('/api/automod');
   const cfg=data[gid]||{enabled:false,blockInvites:true,blockSpam:true,action:'mute',bannedWords:[]};
@@ -363,7 +350,7 @@ function renderWords(gid,words){
 
 // ── Embed Builder ─────────────────────────────────────────────────
 async function loadEmbedChannels(){
-  const gid=document.getElementById('emb-guild')?.value;if(!gid)return;
+  const gid=currentGuild;if(!gid)return;
   await loadGuildData(gid);
   document.getElementById('emb-channel').innerHTML=chOptions(gid);
 }
@@ -397,7 +384,7 @@ async function sendEmbed(){
 
 // ── Tickets ────────────────────────────────────────────────────────
 async function loadTickets(){
-  const gid=document.getElementById('tk-guild').value;if(!gid)return;
+  const gid=currentGuild;if(!gid)return;
   await loadGuildData(gid);
   const data=await api('/api/tickets');
   const cfg=data[gid]||{categoryId:'',supportRoleId:'',categories:[]};
@@ -448,7 +435,7 @@ async function removeCat(gid,prefix){
 
 // ── Social Media ───────────────────────────────────────────────────
 async function loadSocial(){
-  const gid=document.getElementById('soc-guild').value;if(!gid)return;
+  const gid=currentGuild;if(!gid)return;
   await loadGuildData(gid);
   const data=await api('/api/social');
   const entries=data[gid]||[];
@@ -500,7 +487,7 @@ async function removeSocial(gid,platform,handle){
 
 // ── Warnings ───────────────────────────────────────────────────────
 async function loadWarnings(){
-  const gid=document.getElementById('warn-guild').value;if(!gid)return;
+  const gid=currentGuild;if(!gid)return;
   const data=await api('/api/warnings');
   const users=data[gid]||{};
   const rows=Object.entries(users).map(([uid,warns])=>`
