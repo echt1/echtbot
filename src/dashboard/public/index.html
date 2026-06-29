@@ -36,7 +36,7 @@ textarea{width:100%;resize:vertical;min-height:80px;font-family:inherit}
 .btn-sm{padding:5px 12px;font-size:.82rem}
 .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent)}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.row label{font-size:.88rem;color:var(--muted);min-width:130px}
+.row > label:not(.toggle){font-size:.88rem;color:var(--muted);min-width:130px}
 .toggle{position:relative;width:42px;height:24px;flex-shrink:0;min-width:42px!important}
 .toggle input{opacity:0;width:0;height:0}
 .toggle .slider{position:absolute;inset:0;background:var(--border);border-radius:12px;cursor:pointer;transition:.2s}
@@ -287,24 +287,28 @@ async function saveStatus(){
 async function loadAutomod(){
   const gid=firstGuild();
   if(!gid){document.getElementById('automod-content').innerHTML='<div class="empty">Kein Server gefunden.</div>';return;}
-  try {
+  try{
     const data=await api('/api/automod');
     const cfg=data[gid]||{enabled:false,blockInvites:true,blockSpam:true,action:'mute',bannedWords:[]};
     const words=cfg.bannedWords||[];
+    const wordTags=words.map(w=>{
+      const enc=encodeURIComponent(w);
+      return `<span class="tag">${w.replace(/</g,'&lt;')}<span class="x" data-gid="${gid}" data-word="${enc}" onclick="removeWordBtn(this)">✕</span></span>`;
+    }).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>';
     document.getElementById('automod-content').innerHTML=`
       <div class="section">
         <div style="display:flex;flex-direction:column;gap:14px">
           <div class="row"><label>Automod aktiv</label>
-            <label class="toggle"><input type="checkbox" ${cfg.enabled?'checked':''} onchange="patchAm(${JSON.stringify(gid)},{enabled:this.checked})"><span class="slider"></span></label>
+            <label class="toggle"><input type="checkbox" ${cfg.enabled?'checked':''} onchange="patchAm('${gid}',{enabled:this.checked})"><span class="slider"></span></label>
           </div>
           <div class="row"><label>Invite-Links blocken</label>
-            <label class="toggle"><input type="checkbox" ${cfg.blockInvites?'checked':''} onchange="patchAm(${JSON.stringify(gid)},{blockInvites:this.checked})"><span class="slider"></span></label>
+            <label class="toggle"><input type="checkbox" ${cfg.blockInvites?'checked':''} onchange="patchAm('${gid}',{blockInvites:this.checked})"><span class="slider"></span></label>
           </div>
           <div class="row"><label>Spam-Schutz</label>
-            <label class="toggle"><input type="checkbox" ${cfg.blockSpam?'checked':''} onchange="patchAm(${JSON.stringify(gid)},{blockSpam:this.checked})"><span class="slider"></span></label>
+            <label class="toggle"><input type="checkbox" ${cfg.blockSpam?'checked':''} onchange="patchAm('${gid}',{blockSpam:this.checked})"><span class="slider"></span></label>
           </div>
           <div class="row"><label>Aktion bei Verstoß</label>
-            <select onchange="patchAm(${JSON.stringify(gid)},{action:this.value})">
+            <select onchange="patchAm('${gid}',{action:this.value})">
               <option value="warn" ${cfg.action==='warn'?'selected':''}>Nur Warnen</option>
               <option value="mute" ${cfg.action==='mute'?'selected':''}>Mute</option>
               <option value="kick" ${cfg.action==='kick'?'selected':''}>Kick</option>
@@ -312,26 +316,30 @@ async function loadAutomod(){
           </div>
           <div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <label style="color:var(--muted);font-size:.88rem">Verbotene Wörter (${words.length})</label>
-              <button class="btn btn-ghost btn-sm" onclick="resetWords(${JSON.stringify(gid)})">↺ Standard-Liste</button>
+              <span style="color:var(--muted);font-size:.88rem">Verbotene Wörter (${words.length})</span>
+              <button class="btn btn-ghost btn-sm" onclick="resetWords('${gid}')">↺ Standard-Liste</button>
             </div>
-            <div class="tag-cloud" id="word-cloud">${words.map(w=>`<span class="tag">${w.replace(/</g,'&lt;')}<span class="x" onclick="removeWord(${JSON.stringify(gid)},${JSON.stringify(w)})">✕</span></span>`).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>'}</div>
+            <div class="tag-cloud" id="word-cloud">${wordTags}</div>
             <div class="row" style="margin-top:10px">
-              <input type="text" id="new-word" placeholder="Neues Wort..." style="flex:1" onkeydown="if(event.key==='Enter')addWord(${JSON.stringify(gid)})">
-              <button class="btn btn-primary btn-sm" onclick="addWord(${JSON.stringify(gid)})">+ Hinzufügen</button>
+              <input type="text" id="new-word" placeholder="Neues Wort..." style="flex:1" onkeydown="if(event.key==='Enter')addWord('${gid}')">
+              <button class="btn btn-primary btn-sm" onclick="addWord('${gid}')">+ Hinzufügen</button>
             </div>
             <span class="success" id="am-msg" style="display:block;margin-top:6px"></span>
           </div>
         </div>
       </div>`;
-  } catch(e){err('automod-content','Fehler beim Laden: '+e.message);}
+  }catch(e){document.getElementById('automod-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
 }
-async function patchAm(gid,patch){await api(`/api/automod/${gid}`,{method:'POST',body:JSON.stringify(patch)});flash('am-msg','✅ Gespeichert.');}
+async function patchAm(gid,patch){
+  await api(`/api/automod/${gid}`,{method:'POST',body:JSON.stringify(patch)});
+  flash('am-msg','✅ Gespeichert.');
+}
 async function addWord(gid){
   const inp=document.getElementById('new-word'),w=inp.value.trim();if(!w)return;
   const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'add',word:w})});
   inp.value='';renderWords(gid,r.words);flash('am-msg','✅ Hinzugefügt.');
 }
+function removeWordBtn(btn){removeWord(btn.dataset.gid,decodeURIComponent(btn.dataset.word));}
 async function removeWord(gid,word){
   const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'remove',word})});
   renderWords(gid,r.words);
@@ -343,7 +351,10 @@ async function resetWords(gid){
 }
 function renderWords(gid,words){
   const c=document.getElementById('word-cloud');if(!c)return;
-  c.innerHTML=words.map(w=>`<span class="tag">${w.replace(/</g,'&lt;')}<span class="x" onclick="removeWord(${JSON.stringify(gid)},${JSON.stringify(w)})">✕</span></span>`).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>';
+  c.innerHTML=words.map(w=>{
+    const enc=encodeURIComponent(w);
+    return `<span class="tag">${w.replace(/</g,'&lt;')}<span class="x" data-gid="${gid}" data-word="${enc}" onclick="removeWordBtn(this)">✕</span></span>`;
+  }).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>';
 }
 
 // ── Embed Builder ───────────────────────────────────────────────────
@@ -391,55 +402,58 @@ async function loadTickets(){
   try{
     await loadGuildData(gid);
     const data=await api('/api/tickets');
-    const cfg=data[gid]||{categoryId:'',supportRoleId:'',categories:[]};
+    const cfg=data[gid]||{supportRoleId:'',categories:[]};
     const cats=cfg.categories||[];
+    const catRows=cats.map(c=>`<tr>
+      <td><span class="prefix-badge">${c.prefix}</span></td>
+      <td>${c.emoji||'–'}</td>
+      <td>${c.label}${c.description?`<div style="font-size:.78rem;color:var(--muted)">${c.description}</div>`:''}</td>
+      <td>${c.hasForm?'✅':'–'}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-cat="${encodeURIComponent(JSON.stringify(c))}" onclick="editCatBtn(this)">✏️</button>
+        <button class="btn btn-danger btn-sm" data-gid="${gid}" data-prefix="${c.prefix}" onclick="removeCatBtn(this)">✕</button>
+      </div></td></tr>`).join('');
     document.getElementById('tickets-content').innerHTML=`
       <div class="section"><h2>Support-Rolle</h2>
         <div class="row">
           <select id="tk-role">${roleOptions(gid,cfg.supportRoleId)}</select>
-          <button class="btn btn-primary btn-sm" onclick="saveTicketConfig(${JSON.stringify(gid)})">Speichern</button>
+          <button class="btn btn-primary btn-sm" onclick="saveTicketConfig('${gid}')">Speichern</button>
           <span class="success" id="tk-msg"></span>
         </div>
       </div>
-      <div class="section"><h2>Ticket-Kategorien (Dropdown)</h2>
-        <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Nach Änderungen /ticket-setup erneut ausführen, damit das Panel aktualisiert wird.</p>
-        <table><tr><th>Prefix</th><th>Emoji</th><th>Label</th><th>Formular</th><th></th></tr>
-        ${cats.map(c=>`<tr>
-          <td><span class="prefix-badge">${c.prefix}</span></td>
-          <td>${c.emoji||'–'}</td>
-          <td>${c.label}${c.description?`<br><small style="color:var(--muted)">${c.description}</small>`:''}</td>
-          <td>${c.hasForm?'✅':'–'}</td>
-          <td style="display:flex;gap:6px">
-            <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-cat="${encodeURIComponent(JSON.stringify(c))}" onclick="editCatBtn(this)">✏️</button>
-            <button class="btn btn-danger btn-sm" data-gid="${gid}" data-prefix="${c.prefix}" onclick="removeCatBtn(this)">✕</button>
-          </td></tr>`).join('')||'<tr><td colspan="5" class="empty">Keine Kategorien – Bot benutzt einfachen Button</td></tr>'}
+      <div class="section"><h2>Ticket-Kategorien</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Nach Änderungen /ticket-setup erneut ausführen.</p>
+        <table style="margin-bottom:16px"><tr><th>Prefix</th><th>Emoji</th><th>Label</th><th>Formular</th><th></th></tr>
+          ${catRows||'<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--muted)">Keine Kategorien – Bot benutzt einfachen Button</td></tr>'}
         </table>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:16px" id="cat-form">
-          <div style="font-size:.88rem;color:var(--muted);margin-bottom:10px">Neue Kategorie</div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px">
+          <div style="font-size:.88rem;font-weight:600;margin-bottom:12px" id="cat-form-title">➕ Neue Kategorie</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-            <input type="text" id="cat-prefix" placeholder="Prefix (max 4)" style="width:80px" maxlength="4">
-            <input type="text" id="cat-emoji" placeholder="Emoji 🎫" style="width:80px">
-            <input type="text" id="cat-label" placeholder="Label (z.B. Kooperation)" style="flex:1;min-width:140px">
-            <input type="text" id="cat-desc" placeholder="Beschreibung (optional)" style="flex:1;min-width:140px">
+            <div><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Prefix (max 4)</div><input type="text" id="cat-prefix" placeholder="k" style="width:70px" maxlength="4"></div>
+            <div><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Emoji</div><input type="text" id="cat-emoji" placeholder="🎫" style="width:70px"></div>
+            <div style="flex:1;min-width:140px"><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Label *</div><input type="text" id="cat-label" placeholder="z.B. Kooperation" style="width:100%"></div>
+            <div style="flex:1;min-width:140px"><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Beschreibung</div><input type="text" id="cat-desc" placeholder="Optional" style="width:100%"></div>
           </div>
-          <div class="row" style="margin-bottom:10px">
+          <div class="row" style="margin-bottom:12px">
             <label style="min-width:unset;font-size:.85rem;color:var(--muted)">Formular beim Öffnen zeigen</label>
             <label class="toggle"><input type="checkbox" id="cat-form-toggle"><span class="slider"></span></label>
           </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-primary btn-sm" onclick="addCat(${JSON.stringify(gid)})">+ Hinzufügen</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary btn-sm" onclick="addCat('${gid}')">Speichern</button>
             <button class="btn btn-ghost btn-sm" id="cat-cancel" onclick="resetCatForm()" style="display:none">Abbrechen</button>
+            <span class="success" id="cat-msg"></span>
           </div>
           <input type="hidden" id="cat-edit-prefix">
-          <span class="success" id="cat-msg" style="display:block;margin-top:6px"></span>
         </div>
       </div>`;
-  }catch(e){err('tickets-content','Fehler: '+e.message);}
+  }catch(e){document.getElementById('tickets-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
 }
 async function saveTicketConfig(gid){
   await api(`/api/tickets/${gid}/config`,{method:'POST',body:JSON.stringify({supportRoleId:document.getElementById('tk-role').value})});
   flash('tk-msg','✅ Gespeichert.');
 }
+function editCatBtn(btn){editCat(btn.dataset.gid,JSON.parse(decodeURIComponent(btn.dataset.cat)));}
+function removeCatBtn(btn){removeCat(btn.dataset.gid,btn.dataset.prefix);}
 function editCat(gid,cat){
   document.getElementById('cat-prefix').value=cat.prefix;
   document.getElementById('cat-emoji').value=cat.emoji||'';
@@ -448,28 +462,374 @@ function editCat(gid,cat){
   document.getElementById('cat-form-toggle').checked=!!cat.hasForm;
   document.getElementById('cat-edit-prefix').value=cat.prefix;
   document.getElementById('cat-cancel').style.display='';
+  document.getElementById('cat-form-title').textContent='✏️ Kategorie bearbeiten';
   document.getElementById('cat-prefix').focus();
 }
 function resetCatForm(){
-  ['cat-prefix','cat-emoji','cat-label','cat-desc','cat-edit-prefix'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('cat-form-toggle').checked=false;
-  document.getElementById('cat-cancel').style.display='none';
+  ['cat-prefix','cat-emoji','cat-label','cat-desc','cat-edit-prefix'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const ft=document.getElementById('cat-form-toggle');if(ft)ft.checked=false;
+  const cc=document.getElementById('cat-cancel');if(cc)cc.style.display='none';
+  const ct=document.getElementById('cat-form-title');if(ct)ct.textContent='➕ Neue Kategorie';
 }
 async function addCat(gid){
-  const prefix=document.getElementById('cat-prefix').value.trim();
-  const label=document.getElementById('cat-label').value.trim();
-  const description=document.getElementById('cat-desc').value.trim();
-  const emoji=document.getElementById('cat-emoji').value.trim();
-  const hasForm=document.getElementById('cat-form-toggle').checked;
-  const editPrefix=document.getElementById('cat-edit-prefix').value;
+  const prefix=(document.getElementById('cat-prefix').value||'').trim();
+  const label=(document.getElementById('cat-label').value||'').trim();
   if(!prefix||!label)return alert('Prefix und Label sind Pflichtfelder.');
+  const description=(document.getElementById('cat-desc').value||'').trim();
+  const emoji=(document.getElementById('cat-emoji').value||'').trim();
+  const hasForm=document.getElementById('cat-form-toggle').checked;
+  const editPrefix=(document.getElementById('cat-edit-prefix').value||'').trim();
   if(editPrefix&&editPrefix!==prefix)
     await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix:editPrefix})});
   await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description,emoji,hasForm})});
-  resetCatForm();loadTickets();
+  resetCatForm();flash('cat-msg','✅ Gespeichert.');loadTickets();
 }
 async function removeCat(gid,prefix){
-  if(!confirm(`Kategorie "${prefix}" löschen?`))return;
+  if(!confirm('Kategorie löschen?'))return;
+  await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix})});
+  loadTickets();
+}
+
+// ── Social Media ─────────────────────────────────────────────────────
+async function loadSocial(){
+  const gid=firstGuild();if(!gid)return;
+  try{
+    await loadGuildData(gid);
+    const data=await api('/api/social');
+    const entries=data[gid]||[];
+    const bc={youtube:'badge-yt',twitch:'badge-tw',tiktok:'badge-tt'};
+    const rows=entries.map(e=>`<tr>
+      <td><span class="badge ${bc[e.platform]||''}">${e.platform}</span></td>
+      <td>${e.handle}</td><td>${chName(gid,e.channelId)}</td>
+      <td style="color:var(--muted);font-size:.82rem">${e.message||'–'}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-entry="${encodeURIComponent(JSON.stringify(e))}" onclick="editSocialBtn(this)">✏️</button>
+        <button class="btn btn-danger btn-sm" data-gid="${gid}" data-platform="${e.platform}" data-handle="${encodeURIComponent(e.handle)}" onclick="removeSocialBtn(this)">✕</button>
+      </div></td></tr>`).join('');
+    document.getElementById('social-content').innerHTML=`
+      <div class="section"><h2>Aktive Benachrichtigungen</h2>
+        ${entries.length?`<table><tr><th>Plattform</th><th>Handle</th><th>Channel</th><th>Nachricht</th><th></th></tr>${rows}</table>`:'<div class="empty">Keine Benachrichtigungen aktiv.</div>'}
+      </div>
+      <div class="section">
+        <h2 id="soc-form-title">Neue Benachrichtigung</h2>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="row"><label>Plattform</label>
+            <select id="soc-platform"><option value="youtube">YouTube</option><option value="twitch">Twitch</option><option value="tiktok">TikTok</option></select>
+          </div>
+          <div class="row"><label>Handle / ID</label><input type="text" id="soc-handle" placeholder="YouTube: UCxxx… | Twitch/TikTok: username" style="width:300px"></div>
+          <div class="row"><label>Discord-Channel</label><select id="soc-channel">${chOptions(gid)}</select></div>
+          <div class="row"><label>Custom Nachricht</label><input type="text" id="soc-msg" placeholder="{name} hat gepostet! (optional)" style="width:300px"></div>
+          <input type="hidden" id="soc-edit-handle">
+          <div class="row">
+            <button class="btn btn-primary" onclick="addSocial('${gid}')">+ Speichern</button>
+            <button class="btn btn-ghost" id="soc-cancel" onclick="resetSocForm()" style="display:none">Abbrechen</button>
+            <span class="success" id="soc-success"></span>
+          </div>
+        </div>
+      </div>`;
+  }catch(e){document.getElementById('social-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
+}
+function editSocialBtn(btn){editSocial(btn.dataset.gid,JSON.parse(decodeURIComponent(btn.dataset.entry)));}
+function removeSocialBtn(btn){removeSocial(btn.dataset.gid,btn.dataset.platform,decodeURIComponent(btn.dataset.handle));}
+function editSocial(gid,e){
+  document.getElementById('soc-platform').value=e.platform;
+  document.getElementById('soc-handle').value=e.handle;
+  const ch=document.getElementById('soc-channel');
+  if(ch)for(let o of ch.options)if(o.value===e.channelId)o.selected=true;
+  document.getElementById('soc-msg').value=e.message||'';
+  document.getElementById('soc-edit-handle').value=e.handle;
+  document.getElementById('soc-cancel').style.display='';
+  const ft=document.getElementById('soc-form-title');if(ft)ft.textContent='Benachrichtigung bearbeiten';
+}
+function resetSocForm(){
+  ['soc-handle','soc-msg','soc-edit-handle'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const cc=document.getElementById('soc-cancel');if(cc)cc.style.display='none';
+  const ft=document.getElementById('soc-form-title');if(ft)ft.textContent='Neue Benachrichtigung';
+}
+async function addSocial(gid){
+  const platform=document.getElementById('soc-platform').value;
+  const handle=(document.getElementById('soc-handle').value||'').trim();
+  const channelId=document.getElementById('soc-channel').value;
+  const message=(document.getElementById('soc-msg').value||'').trim();
+  const editHandle=(document.getElementById('soc-edit-handle').value||'').trim();
+  if(!handle)return alert('Handle/ID eingeben.');
+  if(editHandle&&editHandle!==handle)
+    await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'remove',platform,handle:editHandle})});
+  await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'add',platform,handle,channelId,message:message||null})});
+  resetSocForm();flash('soc-success','✅ Gespeichert.');loadSocial();
+}
+async function removeSocial(gid,platform,handle){
+  if(!confirm(`${platform}/${handle} entfernen?`))return;
+  await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'remove',platform,handle})});
+  loadSocial();
+}
+
+// ── Verwarnungen ─────────────────────────────────────────────────────
+async function loadWarnings(){
+  const gid=firstGuild();if(!gid)return;
+  try{
+    const data=await api('/api/warnings');
+    const users=data[gid]||{};
+    const ids=Object.keys(users);
+    if(!ids.length){document.getElementById('warnings-content').innerHTML='<div class="empty">Keine Verwarnungen.</div>';return;}
+    let names={};
+    try{names=await api('/api/users/bulk',{method:'POST',body:JSON.stringify({ids})});}catch(e){}
+    const rows=ids.map(uid=>{
+      const warns=users[uid];
+      const name=names[uid]||uid;
+      return `<tr>
+        <td><strong>${name}</strong><br><code style="font-size:.72rem;color:var(--muted)">${uid}</code></td>
+        <td>${warns.length}</td>
+        <td>${warns.map(w=>`<div style="font-size:.8rem;color:var(--muted)">${w.reason}</div>`).join('')}</td>
+        <td><button class="btn btn-danger btn-sm" data-gid="${gid}" data-uid="${uid}" onclick="delWarnBtn(this)">Löschen</button></td></tr>`;
+    }).join('');
+    document.getElementById('warnings-content').innerHTML=
+      `<div class="section"><table><tr><th>User</th><th>Anzahl</th><th>Gründe</th><th></th></tr>${rows}</table></div>`;
+  }catch(e){document.getElementById('warnings-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
+}
+function delWarnBtn(btn){delWarn(btn.dataset.gid,btn.dataset.uid);}
+async function delWarn(gid,uid){
+  await api(`/api/warnings/${gid}/${uid}`,{method:'DELETE'});loadWarnings();
+}
+
+function editCatBtn(btn){editCat(btn.dataset.gid,JSON.parse(decodeURIComponent(btn.dataset.cat)));}
+function removeCatBtn(btn){removeCat(btn.dataset.gid,btn.dataset.prefix);}
+function editSocialBtn(btn){editSocial(btn.dataset.gid,JSON.parse(decodeURIComponent(btn.dataset.entry)));}
+function removeSocialBtn(btn){removeSocial(btn.dataset.gid,btn.dataset.platform,btn.dataset.handle);}
+function flash(id,msg){const el=document.getElementById(id);if(!el)return;el.textContent=msg;setTimeout(()=>el.textContent='',2500);}
+function err(id,msg){document.getElementById(id).innerHTML=`<div class="empty" style="color:var(--red)">${msg}</div>`;}
+
+// ── Übersicht ───────────────────────────────────────────────────────
+async function loadOverview(){
+  const s=await api('/api/stats');
+  document.getElementById('ov-tag').textContent=s.tag;
+  document.getElementById('ov-guilds').textContent=s.guilds;
+  document.getElementById('ov-users').textContent=s.users.toLocaleString();
+  document.getElementById('ov-uptime').textContent=fmt(s.uptime);
+  const bs=s.botstatus,dc={online:'dot-online',idle:'dot-idle',dnd:'dot-dnd'};
+  document.getElementById('ov-status').innerHTML=
+    `<span class="status-dot ${dc[bs.status]||'dot-online'}"></span><strong>${bs.typ}</strong> ${bs.text||'<em style="color:var(--muted)">kein Text</em>'} <span style="color:var(--muted)">(${bs.status})</span>`;
+}
+
+// ── Bot-Status ──────────────────────────────────────────────────────
+async function loadStatus(){
+  const s=await api('/api/stats'),bs=s.botstatus;
+  document.getElementById('s-typ').value=bs.typ||'watching';
+  document.getElementById('s-text').value=bs.text||'';
+  document.getElementById('s-online').value=bs.status||'online';
+}
+async function saveStatus(){
+  await api('/api/status',{method:'POST',body:JSON.stringify({
+    typ:document.getElementById('s-typ').value,
+    text:document.getElementById('s-text').value||null,
+    status:document.getElementById('s-online').value,
+  })});
+  flash('status-msg','✅ Gespeichert!');loadOverview();
+}
+
+// ── Automod ─────────────────────────────────────────────────────────
+async function loadAutomod(){
+  const gid=firstGuild();
+  if(!gid){document.getElementById('automod-content').innerHTML='<div class="empty">Kein Server gefunden.</div>';return;}
+  try{
+    const data=await api('/api/automod');
+    const cfg=data[gid]||{enabled:false,blockInvites:true,blockSpam:true,action:'mute',bannedWords:[]};
+    const words=cfg.bannedWords||[];
+    const wordTags=words.map(w=>{
+      const enc=encodeURIComponent(w);
+      return `<span class="tag">${w.replace(/</g,'&lt;')}<span class="x" data-gid="${gid}" data-word="${enc}" onclick="removeWordBtn(this)">✕</span></span>`;
+    }).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>';
+    document.getElementById('automod-content').innerHTML=`
+      <div class="section">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="row"><label>Automod aktiv</label>
+            <label class="toggle"><input type="checkbox" ${cfg.enabled?'checked':''} onchange="patchAm('${gid}',{enabled:this.checked})"><span class="slider"></span></label>
+          </div>
+          <div class="row"><label>Invite-Links blocken</label>
+            <label class="toggle"><input type="checkbox" ${cfg.blockInvites?'checked':''} onchange="patchAm('${gid}',{blockInvites:this.checked})"><span class="slider"></span></label>
+          </div>
+          <div class="row"><label>Spam-Schutz</label>
+            <label class="toggle"><input type="checkbox" ${cfg.blockSpam?'checked':''} onchange="patchAm('${gid}',{blockSpam:this.checked})"><span class="slider"></span></label>
+          </div>
+          <div class="row"><label>Aktion bei Verstoß</label>
+            <select onchange="patchAm('${gid}',{action:this.value})">
+              <option value="warn" ${cfg.action==='warn'?'selected':''}>Nur Warnen</option>
+              <option value="mute" ${cfg.action==='mute'?'selected':''}>Mute</option>
+              <option value="kick" ${cfg.action==='kick'?'selected':''}>Kick</option>
+            </select>
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="color:var(--muted);font-size:.88rem">Verbotene Wörter (${words.length})</span>
+              <button class="btn btn-ghost btn-sm" onclick="resetWords('${gid}')">↺ Standard-Liste</button>
+            </div>
+            <div class="tag-cloud" id="word-cloud">${wordTags}</div>
+            <div class="row" style="margin-top:10px">
+              <input type="text" id="new-word" placeholder="Neues Wort..." style="flex:1" onkeydown="if(event.key==='Enter')addWord('${gid}')">
+              <button class="btn btn-primary btn-sm" onclick="addWord('${gid}')">+ Hinzufügen</button>
+            </div>
+            <span class="success" id="am-msg" style="display:block;margin-top:6px"></span>
+          </div>
+        </div>
+      </div>`;
+  }catch(e){document.getElementById('automod-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
+}
+async function patchAm(gid,patch){
+  await api(`/api/automod/${gid}`,{method:'POST',body:JSON.stringify(patch)});
+  flash('am-msg','✅ Gespeichert.');
+}
+async function addWord(gid){
+  const inp=document.getElementById('new-word'),w=inp.value.trim();if(!w)return;
+  const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'add',word:w})});
+  inp.value='';renderWords(gid,r.words);flash('am-msg','✅ Hinzugefügt.');
+}
+function removeWordBtn(btn){removeWord(btn.dataset.gid,decodeURIComponent(btn.dataset.word));}
+async function removeWord(gid,word){
+  const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'remove',word})});
+  renderWords(gid,r.words);
+}
+async function resetWords(gid){
+  if(!confirm('Wortliste auf Standard zurücksetzen?'))return;
+  const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'reset'})});
+  renderWords(gid,r.words);flash('am-msg',`✅ ${r.words.length} Standard-Wörter geladen.`);
+}
+function renderWords(gid,words){
+  const c=document.getElementById('word-cloud');if(!c)return;
+  c.innerHTML=words.map(w=>{
+    const enc=encodeURIComponent(w);
+    return `<span class="tag">${w.replace(/</g,'&lt;')}<span class="x" data-gid="${gid}" data-word="${enc}" onclick="removeWordBtn(this)">✕</span></span>`;
+  }).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>';
+}
+
+// ── Embed Builder ───────────────────────────────────────────────────
+async function loadEmbedPage(){
+  const gid=firstGuild();if(!gid)return;
+  await loadGuildData(gid);
+  document.getElementById('emb-channel').innerHTML=chOptions(gid);
+  updatePreview();
+}
+function updatePreview(){
+  const v=id=>document.getElementById(id)?.value||'';
+  const title=v('emb-title');
+  const rawDesc=v('emb-desc');
+  const desc=rawDesc.split('\\n').join('\n');
+  const color=v('emb-color')||'#5865f2';
+  const img=v('emb-img'),thumb=v('emb-thumb'),footer=v('emb-footer'),content=v('emb-content');
+  document.getElementById('embed-preview-wrap').style.borderLeftColor=color;
+  const setH=(id,val)=>{const e=document.getElementById(id);if(!e)return;e.style.display=val?'block':'none';if(val)e.textContent=val;};
+  setH('ep-title',title);
+  setH('ep-desc',desc);
+  setH('ep-footer',footer?footer+' • Heute':null);
+  const ep=document.getElementById('ep-img');if(ep){ep.src=img||'';ep.style.display=img?'block':'none';}
+  const et=document.getElementById('ep-thumb');if(et){et.src=thumb||'';et.style.display=thumb?'block':'none';}
+  const ep2=document.getElementById('embed-plain-preview');if(ep2){ep2.textContent=content;ep2.style.display=content?'block':'none';}
+}
+async function sendEmbed(){
+  const channelId=document.getElementById('emb-channel')?.value;
+  if(!channelId)return alert('Keinen Channel ausgewählt.');
+  const body={channelId,
+    title:document.getElementById('emb-title').value,
+    description:document.getElementById('emb-desc').value,
+    color:document.getElementById('emb-color').value,
+    imageUrl:document.getElementById('emb-img').value,
+    thumbnailUrl:document.getElementById('emb-thumb').value,
+    footer:document.getElementById('emb-footer').value,
+    content:document.getElementById('emb-content').value,
+    timestamp:document.getElementById('emb-ts')?.checked!==false};
+  const r=await api('/api/embed',{method:'POST',body:JSON.stringify(body)});
+  if(r.ok)flash('emb-msg','✅ Gesendet!');else alert('Fehler: '+r.error);
+}
+
+// ── Tickets ─────────────────────────────────────────────────────────
+async function loadTickets(){
+  const gid=firstGuild();if(!gid)return;
+  try{
+    await loadGuildData(gid);
+    const data=await api('/api/tickets');
+    const cfg=data[gid]||{supportRoleId:'',categories:[]};
+    const cats=cfg.categories||[];
+    const catRows=cats.map(c=>`<tr>
+      <td><span class="prefix-badge">${c.prefix}</span></td>
+      <td>${c.emoji||'–'}</td>
+      <td>${c.label}${c.description?`<div style="font-size:.78rem;color:var(--muted)">${c.description}</div>`:''}</td>
+      <td>${c.hasForm?'✅':'–'}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-cat="${encodeURIComponent(JSON.stringify(c))}" onclick="editCatBtn(this)">✏️</button>
+        <button class="btn btn-danger btn-sm" data-gid="${gid}" data-prefix="${c.prefix}" onclick="removeCatBtn(this)">✕</button>
+      </div></td></tr>`).join('');
+    document.getElementById('tickets-content').innerHTML=`
+      <div class="section"><h2>Support-Rolle</h2>
+        <div class="row">
+          <select id="tk-role">${roleOptions(gid,cfg.supportRoleId)}</select>
+          <button class="btn btn-primary btn-sm" onclick="saveTicketConfig('${gid}')">Speichern</button>
+          <span class="success" id="tk-msg"></span>
+        </div>
+      </div>
+      <div class="section"><h2>Ticket-Kategorien</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Nach Änderungen /ticket-setup erneut ausführen.</p>
+        <table style="margin-bottom:16px"><tr><th>Prefix</th><th>Emoji</th><th>Label</th><th>Formular</th><th></th></tr>
+          ${catRows||'<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--muted)">Keine Kategorien – Bot benutzt einfachen Button</td></tr>'}
+        </table>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px">
+          <div style="font-size:.88rem;font-weight:600;margin-bottom:12px" id="cat-form-title">➕ Neue Kategorie</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <div><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Prefix (max 4)</div><input type="text" id="cat-prefix" placeholder="k" style="width:70px" maxlength="4"></div>
+            <div><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Emoji</div><input type="text" id="cat-emoji" placeholder="🎫" style="width:70px"></div>
+            <div style="flex:1;min-width:140px"><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Label *</div><input type="text" id="cat-label" placeholder="z.B. Kooperation" style="width:100%"></div>
+            <div style="flex:1;min-width:140px"><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Beschreibung</div><input type="text" id="cat-desc" placeholder="Optional" style="width:100%"></div>
+          </div>
+          <div class="row" style="margin-bottom:12px">
+            <label style="min-width:unset;font-size:.85rem;color:var(--muted)">Formular beim Öffnen zeigen</label>
+            <label class="toggle"><input type="checkbox" id="cat-form-toggle"><span class="slider"></span></label>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary btn-sm" onclick="addCat('${gid}')">Speichern</button>
+            <button class="btn btn-ghost btn-sm" id="cat-cancel" onclick="resetCatForm()" style="display:none">Abbrechen</button>
+            <span class="success" id="cat-msg"></span>
+          </div>
+          <input type="hidden" id="cat-edit-prefix">
+        </div>
+      </div>`;
+  }catch(e){document.getElementById('tickets-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
+}
+async function saveTicketConfig(gid){
+  await api(`/api/tickets/${gid}/config`,{method:'POST',body:JSON.stringify({supportRoleId:document.getElementById('tk-role').value})});
+  flash('tk-msg','✅ Gespeichert.');
+}
+function editCatBtn(btn){editCat(btn.dataset.gid,JSON.parse(decodeURIComponent(btn.dataset.cat)));}
+function removeCatBtn(btn){removeCat(btn.dataset.gid,btn.dataset.prefix);}
+function editCat(gid,cat){
+  document.getElementById('cat-prefix').value=cat.prefix;
+  document.getElementById('cat-emoji').value=cat.emoji||'';
+  document.getElementById('cat-label').value=cat.label;
+  document.getElementById('cat-desc').value=cat.description||'';
+  document.getElementById('cat-form-toggle').checked=!!cat.hasForm;
+  document.getElementById('cat-edit-prefix').value=cat.prefix;
+  document.getElementById('cat-cancel').style.display='';
+  document.getElementById('cat-form-title').textContent='✏️ Kategorie bearbeiten';
+  document.getElementById('cat-prefix').focus();
+}
+function resetCatForm(){
+  ['cat-prefix','cat-emoji','cat-label','cat-desc','cat-edit-prefix'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const ft=document.getElementById('cat-form-toggle');if(ft)ft.checked=false;
+  const cc=document.getElementById('cat-cancel');if(cc)cc.style.display='none';
+  const ct=document.getElementById('cat-form-title');if(ct)ct.textContent='➕ Neue Kategorie';
+}
+async function addCat(gid){
+  const prefix=(document.getElementById('cat-prefix').value||'').trim();
+  const label=(document.getElementById('cat-label').value||'').trim();
+  if(!prefix||!label)return alert('Prefix und Label sind Pflichtfelder.');
+  const description=(document.getElementById('cat-desc').value||'').trim();
+  const emoji=(document.getElementById('cat-emoji').value||'').trim();
+  const hasForm=document.getElementById('cat-form-toggle').checked;
+  const editPrefix=(document.getElementById('cat-edit-prefix').value||'').trim();
+  if(editPrefix&&editPrefix!==prefix)
+    await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix:editPrefix})});
+  await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description,emoji,hasForm})});
+  resetCatForm();flash('cat-msg','✅ Gespeichert.');loadTickets();
+}
+async function removeCat(gid,prefix){
+  if(!confirm('Kategorie löschen?'))return;
   await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix})});
   loadTickets();
 }
