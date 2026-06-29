@@ -200,7 +200,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
 </div>
 
 <script>
-let TOKEN='', guilds={}, chCache={}, roleCache={}, currentGuild=null;
+let TOKEN='', guilds={}, chCache={}, roleCache={};
 
 function doLogin(){
   TOKEN=document.getElementById('token-input').value.trim();
@@ -216,7 +216,7 @@ document.getElementById('token-input').addEventListener('keydown',e=>{if(e.key==
 const saved=localStorage.getItem('dash_token');
 if(saved){TOKEN=saved;fetch('/api/stats',{headers:{authorization:TOKEN}}).then(r=>{
   if(r.ok){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';init();}
-  else{localStorage.removeItem('dash_token');}
+  else localStorage.removeItem('dash_token');
 });}
 
 async function api(path,opts={}){
@@ -224,56 +224,48 @@ async function api(path,opts={}){
   return r.json();
 }
 
+function firstGuild(){return Object.keys(guilds)[0];}
+
 function nav(page,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if(el)el.classList.add('active');
-  if(page==='overview')loadOverview();
-  if(page==='status')loadStatus();
-  if(page==='automod')loadAutomod();
-  if(page==='embed')loadEmbedChannels();
-  if(page==='tickets')loadTickets();
-  if(page==='social')loadSocial();
-  if(page==='warnings')loadWarnings();
+  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings};
+  if(loaders[page])loaders[page]();
 }
 
-function fmt(sec){const d=Math.floor(sec/86400),h=Math.floor((sec%86400)/3600),m=Math.floor((sec%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
-
 async function init(){
-  guilds=await api("/api/guilds");
-  currentGuild=Object.keys(guilds)[0]||null;
+  guilds=await api('/api/guilds');
   loadOverview();
 }
 
-
 async function loadGuildData(gid){
-  if(!chCache[gid])chCache[gid]=await api(`/api/guilds/${gid}/channels`);
-  if(!roleCache[gid])roleCache[gid]=await api(`/api/guilds/${gid}/roles`);
+  if(!chCache[gid])chCache[gid]=await api(`/api/guilds/${gid}/channels`).catch(()=>[]);
+  if(!roleCache[gid])roleCache[gid]=await api(`/api/guilds/${gid}/roles`).catch(()=>[]);
 }
-
-function chName(gid,id){const ch=(chCache[gid]||[]).find(c=>c.id===id);return ch?`#${ch.name}`:id;}
-function roleName(gid,id){const r=(roleCache[gid]||[]).find(r=>r.id===id);return r?`@${r.name}`:id;}
-
+function chName(gid,id){const c=(chCache[gid]||[]).find(c=>c.id===id);return c?`#${c.name}`:id;}
 function chOptions(gid,sel=''){return(chCache[gid]||[]).map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>#${c.name}</option>`).join('');}
 function roleOptions(gid,sel=''){return(roleCache[gid]||[]).map(r=>`<option value="${r.id}"${r.id===sel?' selected':''}>${r.name}</option>`).join('');}
+function fmt(s){const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
+function flash(id,msg){const el=document.getElementById(id);if(!el)return;el.textContent=msg;setTimeout(()=>el.textContent='',2500);}
+function err(id,msg){document.getElementById(id).innerHTML=`<div class="empty" style="color:var(--red)">${msg}</div>`;}
 
-// ── Übersicht ──────────────────────────────────────────────────────
+// ── Übersicht ───────────────────────────────────────────────────────
 async function loadOverview(){
   const s=await api('/api/stats');
   document.getElementById('ov-tag').textContent=s.tag;
   document.getElementById('ov-guilds').textContent=s.guilds;
   document.getElementById('ov-users').textContent=s.users.toLocaleString();
   document.getElementById('ov-uptime').textContent=fmt(s.uptime);
-  const bs=s.botstatus;
-  const dc={online:'dot-online',idle:'dot-idle',dnd:'dot-dnd'}[bs.status]||'dot-online';
+  const bs=s.botstatus,dc={online:'dot-online',idle:'dot-idle',dnd:'dot-dnd'};
   document.getElementById('ov-status').innerHTML=
-    `<span class="status-dot ${dc}"></span><strong>${bs.typ}</strong> ${bs.text||'<em>kein Text</em>'} <span style="color:var(--muted)">(${bs.status})</span>`;
+    `<span class="status-dot ${dc[bs.status]||'dot-online'}"></span><strong>${bs.typ}</strong> ${bs.text||'<em style="color:var(--muted)">kein Text</em>'} <span style="color:var(--muted)">(${bs.status})</span>`;
 }
 
-// ── Status ─────────────────────────────────────────────────────────
+// ── Bot-Status ──────────────────────────────────────────────────────
 async function loadStatus(){
-  const s=await api('/api/stats');const bs=s.botstatus;
+  const s=await api('/api/stats'),bs=s.botstatus;
   document.getElementById('s-typ').value=bs.typ||'watching';
   document.getElementById('s-text').value=bs.text||'';
   document.getElementById('s-online').value=bs.status||'online';
@@ -287,50 +279,52 @@ async function saveStatus(){
   flash('status-msg','✅ Gespeichert!');loadOverview();
 }
 
-// ── Automod ────────────────────────────────────────────────────────
+// ── Automod ─────────────────────────────────────────────────────────
 async function loadAutomod(){
-  const gid=firstGuild();if(!gid)return;
-  await loadGuildData(gid);
-  const data=await api('/api/automod');
-  const cfg=data[gid]||{enabled:false,blockInvites:true,blockSpam:true,action:'mute',bannedWords:[]};
-  const words=cfg.bannedWords||[];
-  document.getElementById('automod-content').innerHTML=`
-    <div class="section">
-      <div style="display:flex;flex-direction:column;gap:14px">
-        <div class="row"><label>Automod aktiv</label>
-          <label class="toggle"><input type="checkbox" id="am-en" ${cfg.enabled?'checked':''} onchange="patchAm('${gid}',{enabled:this.checked})"><span class="slider"></span></label>
-        </div>
-        <div class="row"><label>Invite-Links blocken</label>
-          <label class="toggle"><input type="checkbox" id="am-inv" ${cfg.blockInvites?'checked':''} onchange="patchAm('${gid}',{blockInvites:this.checked})"><span class="slider"></span></label>
-        </div>
-        <div class="row"><label>Spam-Schutz</label>
-          <label class="toggle"><input type="checkbox" id="am-spam" ${cfg.blockSpam?'checked':''} onchange="patchAm('${gid}',{blockSpam:this.checked})"><span class="slider"></span></label>
-        </div>
-        <div class="row"><label>Aktion bei Verstoß</label>
-          <select onchange="patchAm('${gid}',{action:this.value})">
-            <option value="warn" ${cfg.action==='warn'?'selected':''}>Nur Warnen</option>
-            <option value="mute" ${cfg.action==='mute'?'selected':''}>Mute</option>
-            <option value="kick" ${cfg.action==='kick'?'selected':''}>Kick</option>
-          </select>
-        </div>
-        <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <label style="color:var(--muted);font-size:.88rem">Verbotene Wörter (${words.length})</label>
-            <button class="btn btn-ghost btn-sm" onclick="resetWords('${gid}')">↺ Standard-Liste</button>
+  const gid=firstGuild();
+  if(!gid){document.getElementById('automod-content').innerHTML='<div class="empty">Kein Server gefunden.</div>';return;}
+  try {
+    const data=await api('/api/automod');
+    const cfg=data[gid]||{enabled:false,blockInvites:true,blockSpam:true,action:'mute',bannedWords:[]};
+    const words=cfg.bannedWords||[];
+    document.getElementById('automod-content').innerHTML=`
+      <div class="section">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="row"><label>Automod aktiv</label>
+            <label class="toggle"><input type="checkbox" ${cfg.enabled?'checked':''} onchange="patchAm(${JSON.stringify(gid)},{enabled:this.checked})"><span class="slider"></span></label>
           </div>
-          <div class="tag-cloud" id="word-cloud">${words.map(w=>`<span class="tag">${w}<span class="x" onclick="removeWord('${gid}','${w}')">✕</span></span>`).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>'}</div>
-          <div class="row" style="margin-top:10px">
-            <input type="text" id="new-word" placeholder="Neues Wort hinzufügen..." style="flex:1" onkeydown="if(event.key==='Enter')addWord('${gid}')">
-            <button class="btn btn-primary btn-sm" onclick="addWord('${gid}')">+ Hinzufügen</button>
+          <div class="row"><label>Invite-Links blocken</label>
+            <label class="toggle"><input type="checkbox" ${cfg.blockInvites?'checked':''} onchange="patchAm(${JSON.stringify(gid)},{blockInvites:this.checked})"><span class="slider"></span></label>
           </div>
-          <span class="success" id="am-msg" style="display:block;margin-top:6px"></span>
+          <div class="row"><label>Spam-Schutz</label>
+            <label class="toggle"><input type="checkbox" ${cfg.blockSpam?'checked':''} onchange="patchAm(${JSON.stringify(gid)},{blockSpam:this.checked})"><span class="slider"></span></label>
+          </div>
+          <div class="row"><label>Aktion bei Verstoß</label>
+            <select onchange="patchAm(${JSON.stringify(gid)},{action:this.value})">
+              <option value="warn" ${cfg.action==='warn'?'selected':''}>Nur Warnen</option>
+              <option value="mute" ${cfg.action==='mute'?'selected':''}>Mute</option>
+              <option value="kick" ${cfg.action==='kick'?'selected':''}>Kick</option>
+            </select>
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label style="color:var(--muted);font-size:.88rem">Verbotene Wörter (${words.length})</label>
+              <button class="btn btn-ghost btn-sm" onclick="resetWords(${JSON.stringify(gid)})">↺ Standard-Liste</button>
+            </div>
+            <div class="tag-cloud" id="word-cloud">${words.map(w=>`<span class="tag">${w.replace(/</g,'&lt;')}<span class="x" onclick="removeWord(${JSON.stringify(gid)},${JSON.stringify(w)})">✕</span></span>`).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>'}</div>
+            <div class="row" style="margin-top:10px">
+              <input type="text" id="new-word" placeholder="Neues Wort..." style="flex:1" onkeydown="if(event.key==='Enter')addWord(${JSON.stringify(gid)})">
+              <button class="btn btn-primary btn-sm" onclick="addWord(${JSON.stringify(gid)})">+ Hinzufügen</button>
+            </div>
+            <span class="success" id="am-msg" style="display:block;margin-top:6px"></span>
+          </div>
         </div>
-      </div>
-    </div>`;
+      </div>`;
+  } catch(e){err('automod-content','Fehler beim Laden: '+e.message);}
 }
 async function patchAm(gid,patch){await api(`/api/automod/${gid}`,{method:'POST',body:JSON.stringify(patch)});flash('am-msg','✅ Gespeichert.');}
 async function addWord(gid){
-  const inp=document.getElementById('new-word');const w=inp.value.trim();if(!w)return;
+  const inp=document.getElementById('new-word'),w=inp.value.trim();if(!w)return;
   const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'add',word:w})});
   inp.value='';renderWords(gid,r.words);flash('am-msg','✅ Hinzugefügt.');
 }
@@ -344,166 +338,244 @@ async function resetWords(gid){
   renderWords(gid,r.words);flash('am-msg',`✅ ${r.words.length} Standard-Wörter geladen.`);
 }
 function renderWords(gid,words){
-  const cloud=document.getElementById('word-cloud');if(!cloud)return;
-  cloud.innerHTML=words.map(w=>`<span class="tag">${w}<span class="x" onclick="removeWord('${gid}','${w}')">✕</span></span>`).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>';
+  const c=document.getElementById('word-cloud');if(!c)return;
+  c.innerHTML=words.map(w=>`<span class="tag">${w.replace(/</g,'&lt;')}<span class="x" onclick="removeWord(${JSON.stringify(gid)},${JSON.stringify(w)})">✕</span></span>`).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>';
 }
 
-// ── Embed Builder ─────────────────────────────────────────────────
-async function loadEmbedChannels(){
-  const gid=currentGuild;if(!gid)return;
+// ── Embed Builder ───────────────────────────────────────────────────
+async function loadEmbedPage(){
+  const gid=firstGuild();if(!gid)return;
   await loadGuildData(gid);
   document.getElementById('emb-channel').innerHTML=chOptions(gid);
+  updatePreview();
 }
 function updatePreview(){
-  const title=document.getElementById('emb-title').value;
-  const desc=document.getElementById('emb-desc').value.replace(/\\n/g,'\n');
-  const color=document.getElementById('emb-color').value;
-  const img=document.getElementById('emb-img').value;
-  const thumb=document.getElementById('emb-thumb').value;
-  const footer=document.getElementById('emb-footer').value;
-  const content=document.getElementById('emb-content').value;
+  const v=id=>document.getElementById(id)?.value||'';
+  const title=v('emb-title'),desc=v('emb-desc').replace(/\n/g,'
+'),color=v('emb-color')||'#5865f2';
+  const img=v('emb-img'),thumb=v('emb-thumb'),footer=v('emb-footer'),content=v('emb-content');
   document.getElementById('embed-preview-wrap').style.borderLeftColor=color;
-  const ep=el=>document.getElementById(el);
-  ep('ep-title').textContent=title;ep('ep-title').style.display=title?'block':'none';
-  ep('ep-desc').textContent=desc;ep('ep-desc').style.display=desc?'block':'none';
-  ep('ep-footer').textContent=footer?`${footer} • Heute`:footer;ep('ep-footer').style.display=footer?'block':'none';
-  if(img){ep('ep-img').src=img;ep('ep-img').style.display='block';}else ep('ep-img').style.display='none';
-  if(thumb){ep('ep-thumb').src=thumb;ep('ep-thumb').style.display='block';}else ep('ep-thumb').style.display='none';
-  const plain=ep('embed-plain-preview');plain.textContent=content;plain.style.display=content?'block':'none';
+  const set=(id,val)=>{const e=document.getElementById(id);if(!e)return;if(val){e.textContent!==undefined?e.textContent=val:null;e.style.display='block';}else e.style.display='none';};
+  const setH=(id,val)=>{const e=document.getElementById(id);if(!e)return;e.style.display=val?'block':'none';if(val)e.textContent=val;};
+  setH('ep-title',title);setH('ep-desc',desc);setH('ep-footer',footer?`${footer} • Heute`:null);
+  const ep=document.getElementById('ep-img');if(ep){ep.src=img||'';ep.style.display=img?'block':'none';}
+  const et=document.getElementById('ep-thumb');if(et){et.src=thumb||'';et.style.display=thumb?'block':'none';}
+  const ep2=document.getElementById('embed-plain-preview');if(ep2){ep2.textContent=content;ep2.style.display=content?'block':'none';}
 }
 async function sendEmbed(){
-  const channelId=document.getElementById('emb-channel').value;
+  const channelId=document.getElementById('emb-channel')?.value;
   if(!channelId)return alert('Keinen Channel ausgewählt.');
-  const body={channelId,title:document.getElementById('emb-title').value,description:document.getElementById('emb-desc').value,
-    color:document.getElementById('emb-color').value,imageUrl:document.getElementById('emb-img').value,
-    thumbnailUrl:document.getElementById('emb-thumb').value,footer:document.getElementById('emb-footer').value,
-    content:document.getElementById('emb-content').value,timestamp:document.getElementById('emb-ts')?.checked!==false};
+  const body={channelId,
+    title:document.getElementById('emb-title').value,
+    description:document.getElementById('emb-desc').value,
+    color:document.getElementById('emb-color').value,
+    imageUrl:document.getElementById('emb-img').value,
+    thumbnailUrl:document.getElementById('emb-thumb').value,
+    footer:document.getElementById('emb-footer').value,
+    content:document.getElementById('emb-content').value,
+    timestamp:document.getElementById('emb-ts')?.checked!==false};
   const r=await api('/api/embed',{method:'POST',body:JSON.stringify(body)});
   if(r.ok)flash('emb-msg','✅ Gesendet!');else alert('Fehler: '+r.error);
 }
 
-// ── Tickets ────────────────────────────────────────────────────────
+// ── Tickets ─────────────────────────────────────────────────────────
 async function loadTickets(){
-  const gid=currentGuild;if(!gid)return;
-  await loadGuildData(gid);
-  const data=await api('/api/tickets');
-  const cfg=data[gid]||{categoryId:'',supportRoleId:'',categories:[]};
-  const cats=cfg.categories||[];
-  document.getElementById('tickets-content').innerHTML=`
-    <div class="section"><h2>Konfiguration</h2>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <div class="row"><label>Support-Rolle</label>
+  const gid=firstGuild();if(!gid)return;
+  try{
+    await loadGuildData(gid);
+    const data=await api('/api/tickets');
+    const cfg=data[gid]||{categoryId:'',supportRoleId:'',categories:[]};
+    const cats=cfg.categories||[];
+    document.getElementById('tickets-content').innerHTML=`
+      <div class="section"><h2>Support-Rolle</h2>
+        <div class="row">
           <select id="tk-role">${roleOptions(gid,cfg.supportRoleId)}</select>
+          <button class="btn btn-primary btn-sm" onclick="saveTicketConfig(${JSON.stringify(gid)})">Speichern</button>
+          <span class="success" id="tk-msg"></span>
         </div>
-        <div><button class="btn btn-primary btn-sm" onclick="saveTicketConfig('${gid}')">Speichern</button>
-        <span class="success" id="tk-msg" style="margin-left:10px"></span></div>
       </div>
-    </div>
-    <div class="section"><h2>Ticket-Kategorien (für Dropdown-Menü)</h2>
-      <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Füge Kategorien hinzu, dann poste das Panel neu mit /ticket-setup. Ohne Kategorien erscheint ein einfacher Button.</p>
-      <table><tr><th>Prefix</th><th>Label</th><th>Beschreibung</th><th></th></tr>
-      ${cats.map(c=>`<tr><td><span class="prefix-badge">${c.prefix}</span></td><td>${c.label}</td><td style="color:var(--muted)">${c.description||'–'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="removeCat('${gid}','${c.prefix}')">✕</button></td></tr>`).join('')||
-        '<tr><td colspan="4" class="empty">Keine Kategorien – Bot benutzt einfachen Button</td></tr>'}
-      </table>
-      <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-        <input type="text" id="cat-prefix" placeholder="Prefix (z.B. k)" style="width:90px" maxlength="4">
-        <input type="text" id="cat-label" placeholder="Label (z.B. Kooperation)" style="flex:1;min-width:140px">
-        <input type="text" id="cat-desc" placeholder="Beschreibung (optional)" style="flex:1;min-width:140px">
-        <button class="btn btn-primary btn-sm" onclick="addCat('${gid}')">+ Hinzufügen</button>
-      </div>
-      <span class="success" id="cat-msg" style="display:block;margin-top:6px"></span>
-    </div>`;
+      <div class="section"><h2>Ticket-Kategorien (Dropdown)</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Nach Änderungen /ticket-setup erneut ausführen, damit das Panel aktualisiert wird.</p>
+        <table><tr><th>Prefix</th><th>Emoji</th><th>Label</th><th>Formular</th><th></th></tr>
+        ${cats.map(c=>`<tr>
+          <td><span class="prefix-badge">${c.prefix}</span></td>
+          <td>${c.emoji||'–'}</td>
+          <td>${c.label}${c.description?`<br><small style="color:var(--muted)">${c.description}</small>`:''}</td>
+          <td>${c.hasForm?'✅':'–'}</td>
+          <td style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" onclick="editCat(${JSON.stringify(gid)},${JSON.stringify(c)})">✏️</button>
+            <button class="btn btn-danger btn-sm" onclick="removeCat(${JSON.stringify(gid)},${JSON.stringify(c.prefix)})">✕</button>
+          </td></tr>`).join('')||'<tr><td colspan="5" class="empty">Keine Kategorien – Bot benutzt einfachen Button</td></tr>'}
+        </table>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:16px" id="cat-form">
+          <div style="font-size:.88rem;color:var(--muted);margin-bottom:10px">Neue Kategorie</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <input type="text" id="cat-prefix" placeholder="Prefix (max 4)" style="width:80px" maxlength="4">
+            <input type="text" id="cat-emoji" placeholder="Emoji 🎫" style="width:80px">
+            <input type="text" id="cat-label" placeholder="Label (z.B. Kooperation)" style="flex:1;min-width:140px">
+            <input type="text" id="cat-desc" placeholder="Beschreibung (optional)" style="flex:1;min-width:140px">
+          </div>
+          <div class="row" style="margin-bottom:10px">
+            <label style="min-width:unset;font-size:.85rem;color:var(--muted)">Formular beim Öffnen zeigen</label>
+            <label class="toggle"><input type="checkbox" id="cat-form-toggle"><span class="slider"></span></label>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="addCat(${JSON.stringify(gid)})">+ Hinzufügen</button>
+            <button class="btn btn-ghost btn-sm" id="cat-cancel" onclick="resetCatForm()" style="display:none">Abbrechen</button>
+          </div>
+          <input type="hidden" id="cat-edit-prefix">
+          <span class="success" id="cat-msg" style="display:block;margin-top:6px"></span>
+        </div>
+      </div>`;
+  }catch(e){err('tickets-content','Fehler: '+e.message);}
 }
 async function saveTicketConfig(gid){
   await api(`/api/tickets/${gid}/config`,{method:'POST',body:JSON.stringify({supportRoleId:document.getElementById('tk-role').value})});
   flash('tk-msg','✅ Gespeichert.');
 }
+function editCat(gid,cat){
+  document.getElementById('cat-prefix').value=cat.prefix;
+  document.getElementById('cat-emoji').value=cat.emoji||'';
+  document.getElementById('cat-label').value=cat.label;
+  document.getElementById('cat-desc').value=cat.description||'';
+  document.getElementById('cat-form-toggle').checked=!!cat.hasForm;
+  document.getElementById('cat-edit-prefix').value=cat.prefix;
+  document.getElementById('cat-cancel').style.display='';
+  document.getElementById('cat-prefix').focus();
+}
+function resetCatForm(){
+  ['cat-prefix','cat-emoji','cat-label','cat-desc','cat-edit-prefix'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cat-form-toggle').checked=false;
+  document.getElementById('cat-cancel').style.display='none';
+}
 async function addCat(gid){
   const prefix=document.getElementById('cat-prefix').value.trim();
   const label=document.getElementById('cat-label').value.trim();
   const description=document.getElementById('cat-desc').value.trim();
+  const emoji=document.getElementById('cat-emoji').value.trim();
+  const hasForm=document.getElementById('cat-form-toggle').checked;
+  const editPrefix=document.getElementById('cat-edit-prefix').value;
   if(!prefix||!label)return alert('Prefix und Label sind Pflichtfelder.');
-  await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description})});
-  document.getElementById('cat-prefix').value='';document.getElementById('cat-label').value='';document.getElementById('cat-desc').value='';
-  loadTickets();
+  if(editPrefix&&editPrefix!==prefix)
+    await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix:editPrefix})});
+  await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description,emoji,hasForm})});
+  resetCatForm();loadTickets();
 }
 async function removeCat(gid,prefix){
+  if(!confirm(`Kategorie "${prefix}" löschen?`))return;
   await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix})});
   loadTickets();
 }
 
-// ── Social Media ───────────────────────────────────────────────────
+// ── Social Media ─────────────────────────────────────────────────────
 async function loadSocial(){
-  const gid=currentGuild;if(!gid)return;
-  await loadGuildData(gid);
-  const data=await api('/api/social');
-  const entries=data[gid]||[];
-  const badgeCls={youtube:'badge-yt',twitch:'badge-tw',tiktok:'badge-tt'};
-  document.getElementById('social-content').innerHTML=`
-    <div class="section"><h2>Aktive Benachrichtigungen</h2>
-      ${entries.length?`<table><tr><th>Plattform</th><th>Handle/ID</th><th>Discord-Channel</th><th></th></tr>
-      ${entries.map(e=>`<tr><td><span class="badge ${badgeCls[e.platform]||''}">${e.platform}</span></td>
-        <td>${e.handle}</td><td>${chName(gid,e.channelId)}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="removeSocial('${gid}','${e.platform}','${e.handle}')">✕</button></td></tr>`).join('')}
-      </table>`:'<div class="empty">Keine Benachrichtigungen aktiv.</div>'}
-    </div>
-    <div class="section"><h2>Neue Benachrichtigung</h2>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <div class="row"><label>Plattform</label>
-          <select id="soc-platform">
-            <option value="youtube">YouTube</option>
-            <option value="twitch">Twitch</option>
-            <option value="tiktok">TikTok</option>
-          </select>
-        </div>
-        <div class="row"><label>Handle / ID</label>
-          <input type="text" id="soc-handle" placeholder="YouTube: UCxxx... | Twitch/TikTok: @username" style="width:300px">
-        </div>
-        <div class="row"><label>Discord-Channel</label>
-          <select id="soc-channel">${chOptions(gid)}</select>
-        </div>
-        <div class="row"><label>Custom Nachricht</label>
-          <input type="text" id="soc-msg" placeholder="{name} hat etwas gepostet! (optional)" style="width:300px">
-        </div>
-        <div><button class="btn btn-primary" onclick="addSocial('${gid}')">+ Hinzufügen</button>
-        <span class="success" id="soc-success" style="margin-left:12px"></span></div>
+  const gid=firstGuild();if(!gid)return;
+  try{
+    await loadGuildData(gid);
+    const data=await api('/api/social');
+    const entries=data[gid]||[];
+    const bc={youtube:'badge-yt',twitch:'badge-tw',tiktok:'badge-tt'};
+    document.getElementById('social-content').innerHTML=`
+      <div class="section"><h2>Aktive Benachrichtigungen</h2>
+        ${entries.length?`<table><tr><th>Plattform</th><th>Handle</th><th>Channel</th><th>Nachricht</th><th></th></tr>
+        ${entries.map(e=>`<tr>
+          <td><span class="badge ${bc[e.platform]||''}">${e.platform}</span></td>
+          <td>${e.handle}</td><td>${chName(gid,e.channelId)}</td>
+          <td style="color:var(--muted);font-size:.82rem">${e.message||'–'}</td>
+          <td style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" onclick="editSocial(${JSON.stringify(gid)},${JSON.stringify(e)})">✏️</button>
+            <button class="btn btn-danger btn-sm" onclick="removeSocial(${JSON.stringify(gid)},${JSON.stringify(e.platform)},${JSON.stringify(e.handle)})">✕</button>
+          </td></tr>`).join('')}
+        </table>`:'<div class="empty">Keine Benachrichtigungen aktiv.</div>'}
       </div>
-    </div>`;
+      <div class="section">
+        <h2 id="soc-form-title">Neue Benachrichtigung</h2>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="row"><label>Plattform</label>
+            <select id="soc-platform">
+              <option value="youtube">YouTube</option>
+              <option value="twitch">Twitch</option>
+              <option value="tiktok">TikTok</option>
+            </select>
+          </div>
+          <div class="row"><label>Handle / ID</label>
+            <input type="text" id="soc-handle" placeholder="YouTube: UCxxx… | Twitch/TikTok: username" style="width:300px">
+          </div>
+          <div class="row"><label>Discord-Channel</label>
+            <select id="soc-channel">${chOptions(gid)}</select>
+          </div>
+          <div class="row"><label>Custom Nachricht</label>
+            <input type="text" id="soc-msg" placeholder="{name} hat gepostet! (optional)" style="width:300px">
+          </div>
+          <input type="hidden" id="soc-edit-handle">
+          <div class="row">
+            <button class="btn btn-primary" onclick="addSocial(${JSON.stringify(gid)})">+ Hinzufügen</button>
+            <button class="btn btn-ghost" id="soc-cancel" onclick="resetSocForm()" style="display:none">Abbrechen</button>
+            <span class="success" id="soc-success"></span>
+          </div>
+        </div>
+      </div>`;
+  }catch(e){err('social-content','Fehler: '+e.message);}
+}
+function editSocial(gid,entry){
+  document.getElementById('soc-platform').value=entry.platform;
+  document.getElementById('soc-handle').value=entry.handle;
+  const chSel=document.getElementById('soc-channel');
+  if(chSel)for(let o of chSel.options)if(o.value===entry.channelId)o.selected=true;
+  document.getElementById('soc-msg').value=entry.message||'';
+  document.getElementById('soc-edit-handle').value=entry.handle;
+  document.getElementById('soc-cancel').style.display='';
+  document.getElementById('soc-form-title').textContent='Benachrichtigung bearbeiten';
+}
+function resetSocForm(){
+  ['soc-handle','soc-msg','soc-edit-handle'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('soc-cancel').style.display='none';
+  document.getElementById('soc-form-title').textContent='Neue Benachrichtigung';
 }
 async function addSocial(gid){
   const platform=document.getElementById('soc-platform').value;
   const handle=document.getElementById('soc-handle').value.trim();
   const channelId=document.getElementById('soc-channel').value;
   const message=document.getElementById('soc-msg').value.trim();
+  const editHandle=document.getElementById('soc-edit-handle').value;
   if(!handle)return alert('Handle/ID eingeben.');
+  if(editHandle&&editHandle!==handle)
+    await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'remove',platform,handle:editHandle})});
   await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'add',platform,handle,channelId,message:message||null})});
-  flash('soc-success','✅ Hinzugefügt.');loadSocial();
+  resetSocForm();flash('soc-success','✅ Gespeichert.');loadSocial();
 }
 async function removeSocial(gid,platform,handle){
+  if(!confirm(`${platform}/${handle} entfernen?`))return;
   await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'remove',platform,handle})});
   loadSocial();
 }
 
-// ── Warnings ───────────────────────────────────────────────────────
+// ── Verwarnungen ─────────────────────────────────────────────────────
 async function loadWarnings(){
-  const gid=currentGuild;if(!gid)return;
-  const data=await api('/api/warnings');
-  const users=data[gid]||{};
-  const rows=Object.entries(users).map(([uid,warns])=>`
-    <tr><td><code>${uid}</code></td><td>${warns.length}</td>
-    <td>${warns.map(w=>`<div style="font-size:.8rem;color:var(--muted)">${w.reason}</div>`).join('')}</td>
-    <td><button class="btn btn-danger btn-sm" onclick="delWarn('${gid}','${uid}')">Löschen</button></td></tr>`).join('');
-  document.getElementById('warnings-content').innerHTML=rows
-    ?`<div class="section"><table><tr><th>User-ID</th><th>Anzahl</th><th>Gründe</th><th></th></tr>${rows}</table></div>`
-    :'<div class="empty">Keine Verwarnungen.</div>';
+  const gid=firstGuild();if(!gid)return;
+  try{
+    const data=await api('/api/warnings');
+    const users=data[gid]||{};
+    const ids=Object.keys(users);
+    if(!ids.length){document.getElementById('warnings-content').innerHTML='<div class="empty">Keine Verwarnungen.</div>';return;}
+    // User-Namen auflösen
+    let names={};
+    try{names=await api('/api/users/bulk',{method:'POST',body:JSON.stringify({ids})});}catch(e){}
+    const rows=ids.map(uid=>{
+      const warns=users[uid];
+      const name=names[uid]||uid;
+      return `<tr><td>${name}<br><code style="font-size:.75rem;color:var(--muted)">${uid}</code></td>
+        <td>${warns.length}</td>
+        <td>${warns.map(w=>`<div style="font-size:.8rem;color:var(--muted)">${w.reason}</div>`).join('')}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="delWarn(${JSON.stringify(gid)},${JSON.stringify(uid)})">Löschen</button></td></tr>`;
+    }).join('');
+    document.getElementById('warnings-content').innerHTML=
+      `<div class="section"><table><tr><th>User</th><th>Anzahl</th><th>Gründe</th><th></th></tr>${rows}</table></div>`;
+  }catch(e){err('warnings-content','Fehler: '+e.message);}
 }
 async function delWarn(gid,uid){
   await api(`/api/warnings/${gid}/${uid}`,{method:'DELETE'});loadWarnings();
 }
-
-// ── Helpers ────────────────────────────────────────────────────────
-function flash(id,msg){const el=document.getElementById(id);if(!el)return;el.textContent=msg;setTimeout(()=>el.textContent='',2500);}
 </script>
 </body>
 </html>
