@@ -187,6 +187,18 @@ function startDashboard(client) {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // ── User-Namen ────────────────────────────────────────────────────────
+  app.post('/api/users/bulk', auth, async (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids must be array' });
+    const result = {};
+    await Promise.all(ids.map(async id => {
+      const u = await client.users.fetch(id).catch(() => null);
+      result[id] = u ? (u.globalName || u.username || id) : id;
+    }));
+    res.json(result);
+  });
+
   app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
 }
 
