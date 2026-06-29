@@ -19,6 +19,7 @@ module.exports = {
     }
 
     try {
+      await target.send({ content: `Du wurdest aus **${interaction.guild.name}** gekickt.\n**Grund:** ${reason}` }).catch(() => {});
       await member.kick(`${reason} | Gekickt von ${interaction.user.tag}`);
 
       const embed = new EmbedBuilder()

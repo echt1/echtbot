@@ -20,6 +20,10 @@ module.exports = {
     }
 
     try {
+      // DM vor dem Ban senden
+      await target.send({ content: `Du wurdest aus **${interaction.guild.name}** gebannt.
+**Grund:** ${reason}` }).catch(() => {});
+
       await interaction.guild.members.ban(target.id, {
         deleteMessageSeconds: deleteDays * 86400,
         reason: `${reason} | Gebannt von ${interaction.user.tag}`,
