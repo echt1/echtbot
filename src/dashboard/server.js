@@ -24,7 +24,10 @@ function startDashboard(client) {
     next();
   };
 
-  app.use(express.static(path.join(__dirname, 'public')));
+  app.use(express.static(path.join(__dirname, 'public'), {
+    etag: false,
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate'),
+  }));
 
   // ── Stats ──────────────────────────────────────────────────────────
   app.get('/api/stats', auth, (req, res) => {
@@ -136,15 +139,23 @@ function startDashboard(client) {
   });
 
   app.post('/api/tickets/:gid/categories', auth, (req, res) => {
-    const { action, label, prefix, description, emoji, hasForm } = req.body;
+    const { action, label, prefix, description, emoji, hasForm, formField1, formField2 } = req.body;
     const tickets = db.get('tickets');
     const gid = req.params.gid;
     tickets[gid] = tickets[gid] || { tickets: {}, categories: [] };
     tickets[gid].categories = tickets[gid].categories || [];
     if (action === 'add' && label && prefix) {
       const p = prefix.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,4);
-      if (p && !tickets[gid].categories.find(c => c.prefix === p))
-        tickets[gid].categories.push({ label, prefix: p, description: description || '', emoji: emoji || '', hasForm: !!hasForm });
+      if (p) {
+        const newEntry = {
+          label, prefix: p, description: description || '', emoji: emoji || '', hasForm: !!hasForm,
+          formField1: formField1 || 'Betreff',
+          formField2: formField2 || 'Beschreibung',
+        };
+        const idx = tickets[gid].categories.findIndex(c => c.prefix === p);
+        if (idx !== -1) tickets[gid].categories[idx] = newEntry; // Update bestehender Eintrag
+        else tickets[gid].categories.push(newEntry); // Neuer Eintrag
+      }
     } else if (action === 'remove' && prefix) {
       tickets[gid].categories = tickets[gid].categories.filter(c => c.prefix !== prefix);
     }
