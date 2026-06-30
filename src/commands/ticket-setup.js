@@ -43,6 +43,7 @@ module.exports = {
           label: c.label,
           value: c.prefix,
           description: c.description || undefined,
+          emoji: c.emoji || undefined,
         })));
       row = new ActionRowBuilder().addComponents(menu);
     } else {
