@@ -403,7 +403,7 @@ async function loadTickets(){
       <td><span class="prefix-badge">${c.prefix}</span></td>
       <td>${c.emoji||'–'}</td>
       <td>${c.label}${c.description?`<div style="font-size:.78rem;color:var(--muted)">${c.description}</div>`:''}</td>
-      <td>${c.hasForm?'✅':'–'}</td>
+      <td>${c.hasForm?`✅ <span style="color:var(--muted);font-size:.78rem">(${c.formField1||'Betreff'}${c.formField2?', '+c.formField2:''})</span>`:'–'}</td>
       <td><div style="display:flex;gap:6px">
         <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-cat="${encodeURIComponent(JSON.stringify(c))}" onclick="editCatBtn(this)">✏️</button>
         <button class="btn btn-danger btn-sm" data-gid="${gid}" data-prefix="${c.prefix}" onclick="removeCatBtn(this)">✕</button>
@@ -431,7 +431,12 @@ async function loadTickets(){
           </div>
           <div class="row" style="margin-bottom:12px">
             <label style="min-width:unset;font-size:.85rem;color:var(--muted)">Formular beim Öffnen zeigen</label>
-            <label class="toggle"><input type="checkbox" id="cat-form-toggle"><span class="slider"></span></label>
+            <label class="toggle"><input type="checkbox" id="cat-form-toggle" onchange="toggleFormFields()"><span class="slider"></span></label>
+          </div>
+          <div id="cat-form-fields" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">
+            <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px;width:100%">Beschriftung der Formularfelder im Ticket-Popup</div>
+            <div style="flex:1;min-width:140px"><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Feld 1 (Pflicht, einzeilig)</div><input type="text" id="cat-form1" placeholder="z.B. Betreff" style="width:100%"></div>
+            <div style="flex:1;min-width:140px"><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Feld 2 (optional, mehrzeilig)</div><input type="text" id="cat-form2" placeholder="z.B. Beschreibung" style="width:100%"></div>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <button class="btn btn-primary btn-sm" onclick="addCat('${gid}')">Speichern</button>
@@ -456,14 +461,22 @@ function editCat(gid,cat){
   document.getElementById('cat-label').value=cat.label;
   document.getElementById('cat-desc').value=cat.description||'';
   document.getElementById('cat-form-toggle').checked=!!cat.hasForm;
+  document.getElementById('cat-form1').value=cat.formField1||'Betreff';
+  document.getElementById('cat-form2').value=cat.formField2||'Beschreibung';
+  toggleFormFields();
   document.getElementById('cat-edit-prefix').value=cat.prefix;
   document.getElementById('cat-cancel').style.display='';
   document.getElementById('cat-form-title').textContent='✏️ Kategorie bearbeiten';
   document.getElementById('cat-prefix').focus();
 }
+function toggleFormFields(){
+  const show=document.getElementById('cat-form-toggle').checked;
+  document.getElementById('cat-form-fields').style.display=show?'flex':'none';
+}
 function resetCatForm(){
-  ['cat-prefix','cat-emoji','cat-label','cat-desc','cat-edit-prefix'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['cat-prefix','cat-emoji','cat-label','cat-desc','cat-edit-prefix','cat-form1','cat-form2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const ft=document.getElementById('cat-form-toggle');if(ft)ft.checked=false;
+  toggleFormFields();
   const cc=document.getElementById('cat-cancel');if(cc)cc.style.display='none';
   const ct=document.getElementById('cat-form-title');if(ct)ct.textContent='➕ Neue Kategorie';
 }
@@ -474,11 +487,13 @@ async function addCat(gid){
   const description=(document.getElementById('cat-desc').value||'').trim();
   const emoji=(document.getElementById('cat-emoji').value||'').trim();
   const hasForm=document.getElementById('cat-form-toggle').checked;
+  const formField1=(document.getElementById('cat-form1').value||'').trim();
+  const formField2=(document.getElementById('cat-form2').value||'').trim();
   const editPrefix=(document.getElementById('cat-edit-prefix').value||'').trim();
   if(editPrefix&&editPrefix!==prefix){
     await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix:editPrefix})});
   }
-  const r=await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description,emoji,hasForm})});
+  const r=await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description,emoji,hasForm,formField1,formField2})});
   if(r.error){alert('Fehler: '+r.error);return;}
   resetCatForm();loadTickets();
 }
