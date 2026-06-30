@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bot Dashboard</title>
+<style>
+:root{--bg:#0e0f13;--surface:#16181d;--surface2:#1e2029;--border:#2a2d38;--accent:#5865f2;--green:#3ba55c;--red:#ed4245;--yellow:#faa61a;--text:#e3e5e8;--muted:#72767d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;min-height:100vh}
+#login{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;width:340px;text-align:center}
+.login-box h1{font-size:1.4rem;margin-bottom:8px}.login-box p{color:var(--muted);font-size:.9rem;margin-bottom:24px}
+.login-box input{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.95rem;margin-bottom:12px}
+.login-box input:focus{outline:none;border-color:var(--accent)}
+#login-err{color:var(--red);font-size:.85rem;margin-bottom:10px;min-height:18px}
+#app{display:none}
+.sidebar{position:fixed;top:0;left:0;width:220px;height:100vh;background:var(--surface);border-right:1px solid var(--border);padding:20px 12px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+.sidebar .logo{font-size:1.1rem;font-weight:700;padding:8px 12px 20px;color:var(--accent)}
+.nav-item{padding:10px 12px;border-radius:8px;cursor:pointer;font-size:.9rem;color:var(--muted);transition:.15s;display:flex;align-items:center;gap:10px}
+.nav-item:hover{background:var(--surface2);color:var(--text)}.nav-item.active{background:var(--accent);color:#fff}
+.main{margin-left:220px;padding:32px;max-width:1000px}
+.page{display:none}.page.active{display:block}
+h1.ptitle{font-size:1.4rem;margin-bottom:24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.card .label{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.card .value{font-size:1.8rem;font-weight:700}.card .sub{font-size:.82rem;color:var(--muted);margin-top:4px}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:20px}
+.section h2{font-size:1rem;font-weight:600;margin-bottom:18px}
+select,input[type=text],input[type=password],input[type=url],textarea{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:.9rem}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+textarea{width:100%;resize:vertical;min-height:80px;font-family:inherit}
+.btn{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:.9rem;font-weight:500;transition:.15s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#4752c4}
+.btn-danger{background:var(--red);color:#fff}.btn-danger:hover{background:#c03537}
+.btn-sm{padding:5px 12px;font-size:.82rem}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row > label:not(.toggle){font-size:.88rem;color:var(--muted);min-width:130px}
+.toggle{position:relative;width:42px;height:24px;flex-shrink:0;min-width:42px!important}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:var(--border);border-radius:12px;cursor:pointer;transition:.2s}
+.toggle .slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:var(--green)}.toggle input:checked+.slider:before{transform:translateX(18px)}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-weight:500}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.75rem;font-weight:600}
+.badge-yt{background:#ff000033;color:#ff4444}.badge-tw{background:#9146ff33;color:#b07aff}.badge-tt{background:#ffffff18;color:#ccc}
+.tag{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:.82rem;margin:2px}
+.tag .x{cursor:pointer;color:var(--muted);font-size:.9rem;line-height:1}.tag .x:hover{color:var(--red)}
+.tag-cloud{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;min-height:36px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.success{color:var(--green);font-size:.85rem;min-height:18px}
+.empty{color:var(--muted);font-size:.88rem;padding:16px 0;text-align:center}
+.status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px}
+.dot-online{background:#3ba55c}.dot-idle{background:#faa61a}.dot-dnd{background:#ed4245}
+.guild-sel{margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.guild-sel label{font-size:.88rem;color:var(--muted)}
+/* Embed Preview */
+.embed-wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:700px){.embed-wrap{grid-template-columns:1fr}}
+.embed-form{display:flex;flex-direction:column;gap:12px}
+.embed-form label{font-size:.82rem;color:var(--muted);margin-bottom:2px;display:block}
+.embed-preview-box{background:#36393f;border-radius:8px;padding:16px;min-height:100px}
+.ep-label{font-size:.75rem;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
+.discord-embed{display:flex;gap:12px;background:#2f3136;border-radius:0 4px 4px 0;padding:12px 16px;border-left:4px solid #5865f2;max-width:100%}
+.discord-embed .embed-content{flex:1;min-width:0}
+.discord-embed .embed-title{font-weight:600;font-size:.95rem;color:#fff;margin-bottom:6px;word-break:break-word}
+.discord-embed .embed-desc{font-size:.875rem;color:#dcddde;white-space:pre-wrap;word-break:break-word}
+.discord-embed .embed-img{max-width:100%;border-radius:4px;margin-top:8px}
+.discord-embed .embed-thumb{width:80px;height:80px;object-fit:cover;border-radius:4px;flex-shrink:0}
+.discord-embed .embed-footer{font-size:.75rem;color:#a3a6aa;margin-top:8px}
+.discord-embed-plain{font-size:.9rem;color:#dcddde;margin-bottom:6px;word-break:break-word}
+.prefix-badge{display:inline-block;background:var(--accent);color:#fff;border-radius:4px;padding:2px 7px;font-size:.75rem;font-weight:600;margin-right:6px}
+input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:none;padding:2px}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="login-box">
+    <h1>🤖 Bot Dashboard</h1>
+    <p>Dashboard-Token eingeben</p>
+    <input type="password" id="token-input" placeholder="Token..." autofocus>
+    <div id="login-err"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Einloggen</button>
+  </div>
+</div>
+
+<div id="app">
+  <nav class="sidebar">
+    <div class="logo">🤖 Dashboard</div>
+    <div class="nav-item active" onclick="nav('overview',this)">📊 Übersicht</div>
+    <div class="nav-item" onclick="nav('status',this)">🎮 Bot-Status</div>
+    <div class="nav-item" onclick="nav('automod',this)">🛡️ Automod</div>
+    <div class="nav-item" onclick="nav('embed',this)">📝 Embed Builder</div>
+    <div class="nav-item" onclick="nav('tickets',this)">🎫 Tickets</div>
+    <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
+    <div class="nav-item" onclick="nav('warnings',this)">⚠️ Verwarnungen</div>
+  </nav>
+  <main class="main">
+
+    <!-- Übersicht -->
+    <div id="page-overview" class="page active">
+      <h1 class="ptitle">Übersicht</h1>
+      <div class="grid">
+        <div class="card"><div class="label">Bot</div><div class="value" id="ov-tag" style="font-size:1.1rem;margin-top:4px">–</div></div>
+        <div class="card"><div class="label">Server</div><div class="value" id="ov-guilds">–</div></div>
+        <div class="card"><div class="label">User gesamt</div><div class="value" id="ov-users">–</div></div>
+        <div class="card"><div class="label">Uptime</div><div class="value" id="ov-uptime" style="font-size:1.1rem;margin-top:4px">–</div></div>
+      </div>
+      <div class="section"><h2>Aktueller Status</h2><div id="ov-status">–</div></div>
+    </div>
+
+    <!-- Bot-Status -->
+    <div id="page-status" class="page">
+      <h1 class="ptitle">Bot-Status</h1>
+      <div class="section">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="row"><label>Online-Status</label>
+            <select id="s-online"><option value="online">🟢 Online</option><option value="idle">🟡 Idle</option><option value="dnd">🔴 Do Not Disturb</option></select>
+          </div>
+          <div class="row"><label>Aktivitätstyp</label>
+            <select id="s-typ"><option value="watching">👀 Watching</option><option value="playing">🎮 Playing</option><option value="listening">🎧 Listening</option><option value="competing">🏆 Competing</option></select>
+          </div>
+          <div class="row"><label>Statustext</label>
+            <input type="text" id="s-text" placeholder="Leer lassen für keinen Aktivitätsstatus" style="width:300px">
+          </div>
+          <div><button class="btn btn-primary" onclick="saveStatus()">✅ Speichern</button>
+          <span class="success" id="status-msg" style="margin-left:12px"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Automod -->
+    <div id="page-automod" class="page">
+      <h1 class="ptitle">Automod</h1>
+      <div id="automod-content"><div class="empty">Laden...</div></div>
+    </div>
+
+    <!-- Embed Builder -->
+    <div id="page-embed" class="page">
+      <h1 class="ptitle">Embed Builder</h1>
+      <div class="section">
+        <div class="row" style="margin-bottom:16px">
+          <label>Channel:</label><select id="emb-channel"></select>
+        </div>
+        <div class="embed-wrap">
+          <div class="embed-form">
+            <div><label>Nachricht über dem Embed (optional)</label><input type="text" id="emb-content" placeholder="z.B. @everyone" style="width:100%" oninput="updatePreview()"></div>
+            <div><label>Titel</label><input type="text" id="emb-title" placeholder="Embed-Titel" style="width:100%" oninput="updatePreview()"></div>
+            <div><label>Beschreibung (\\n = Zeilenumbruch)</label><textarea id="emb-desc" placeholder="Beschreibungstext..." oninput="updatePreview()"></textarea></div>
+            <div class="row"><label>Farbe</label><input type="color" id="emb-color" value="#5865f2" oninput="updatePreview()"></div>
+            <div><label>Bild-URL (groß)</label><input type="url" id="emb-img" placeholder="https://..." style="width:100%" oninput="updatePreview()"></div>
+            <div><label>Thumbnail-URL (klein, rechts)</label><input type="url" id="emb-thumb" placeholder="https://..." style="width:100%" oninput="updatePreview()"></div>
+            <div><label>Footer-Text</label><input type="text" id="emb-footer" placeholder="Footer..." style="width:100%" oninput="updatePreview()"></div>
+            <div class="row"><label>Timestamp anzeigen</label><label class="toggle"><input type="checkbox" id="emb-ts" checked><span class="slider"></span></label></div>
+            <div><button class="btn btn-primary" onclick="sendEmbed()">📤 Senden</button>
+            <span class="success" id="emb-msg" style="margin-left:12px"></span></div>
+          </div>
+          <div>
+            <div class="ep-label">Live-Vorschau</div>
+            <div class="embed-preview-box">
+              <div id="embed-plain-preview" class="discord-embed-plain" style="display:none"></div>
+              <div id="embed-preview-wrap" class="discord-embed">
+                <div class="embed-content">
+                  <div class="embed-title" id="ep-title" style="display:none"></div>
+                  <div class="embed-desc" id="ep-desc" style="display:none"></div>
+                  <img class="embed-img" id="ep-img" style="display:none" alt="">
+                  <div class="embed-footer" id="ep-footer" style="display:none"></div>
+                </div>
+                <img class="embed-thumb" id="ep-thumb" style="display:none" alt="">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tickets -->
+    <div id="page-tickets" class="page">
+      <h1 class="ptitle">Tickets</h1>
+      <div id="tickets-content"><div class="empty">Laden...</div></div>
+    </div>
+
+    <!-- Social -->
+    <div id="page-social" class="page">
+      <h1 class="ptitle">Social Media</h1>
+      <div id="social-content"><div class="empty">Laden...</div></div>
+    </div>
+
+    <!-- Warnings -->
+    <div id="page-warnings" class="page">
+      <h1 class="ptitle">Verwarnungen</h1>
+      <div id="warnings-content"><div class="empty">Laden...</div></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let TOKEN='', guilds={}, chCache={}, roleCache={}, catFormFields=[];
+
+function doLogin(){
+  TOKEN=document.getElementById('token-input').value.trim();
+  fetch('/api/stats',{headers:{authorization:TOKEN}}).then(r=>{
+    if(r.status===401){document.getElementById('login-err').textContent='Falscher Token.';TOKEN='';return;}
+    localStorage.setItem('dash_token',TOKEN);
+    document.getElementById('login').style.display='none';
+    document.getElementById('app').style.display='block';
+    init();
+  });
+}
+document.getElementById('token-input').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+const saved=localStorage.getItem('dash_token');
+if(saved){
+  TOKEN=saved;
+  fetch('/api/stats',{headers:{authorization:TOKEN}}).then(r=>{
+    if(r.ok){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';init();}
+    else localStorage.removeItem('dash_token');
+  });
+}
+
+async function api(path,opts={}){
+  const r=await fetch(path,{...opts,headers:{authorization:TOKEN,'content-type':'application/json',...(opts.headers||{})}});
+  return r.json();
+}
+
+function firstGuild(){return Object.keys(guilds)[0];}
+
+function nav(page,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  if(el)el.classList.add('active');
+  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings};
+  if(loaders[page])loaders[page]();
+}
+
+async function init(){
+  guilds=await api('/api/guilds');
+  loadOverview();
+}
+
+async function loadGuildData(gid){
+  if(!chCache[gid])chCache[gid]=await api(`/api/guilds/${gid}/channels`).catch(()=>[]);
+  if(!roleCache[gid])roleCache[gid]=await api(`/api/guilds/${gid}/roles`).catch(()=>[]);
+}
+function chName(gid,id){const c=(chCache[gid]||[]).find(c=>c.id===id);return c?`#${c.name}`:id;}
+function chOptions(gid,sel=''){return(chCache[gid]||[]).map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>#${c.name}</option>`).join('');}
+function roleOptions(gid,sel=''){return(roleCache[gid]||[]).map(r=>`<option value="${r.id}"${r.id===sel?' selected':''}>${r.name}</option>`).join('');}
+function fmt(s){const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
+function flash(id,msg){const el=document.getElementById(id);if(!el)return;el.textContent=msg;setTimeout(()=>el.textContent='',2500);}
+function showErr(id,msg){const el=document.getElementById(id);if(el)el.innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+msg+'</div>';}
+
+// ── Übersicht ───────────────────────────────────────────────────────
+async function loadOverview(){
+  const s=await api('/api/stats');
+  document.getElementById('ov-tag').textContent=s.tag;
+  document.getElementById('ov-guilds').textContent=s.guilds;
+  document.getElementById('ov-users').textContent=s.users.toLocaleString();
+  document.getElementById('ov-uptime').textContent=fmt(s.uptime);
+  const bs=s.botstatus,dc={online:'dot-online',idle:'dot-idle',dnd:'dot-dnd'};
+  document.getElementById('ov-status').innerHTML=
+    `<span class="status-dot ${dc[bs.status]||'dot-online'}"></span><strong>${bs.typ}</strong> ${bs.text||'<em style="color:var(--muted)">kein Text</em>'} <span style="color:var(--muted)">(${bs.status})</span>`;
+}
+
+// ── Bot-Status ──────────────────────────────────────────────────────
+async function loadStatus(){
+  const s=await api('/api/stats'),bs=s.botstatus;
+  document.getElementById('s-typ').value=bs.typ||'watching';
+  document.getElementById('s-text').value=bs.text||'';
+  document.getElementById('s-online').value=bs.status||'online';
+}
+async function saveStatus(){
+  await api('/api/status',{method:'POST',body:JSON.stringify({
+    typ:document.getElementById('s-typ').value,
+    text:document.getElementById('s-text').value||null,
+    status:document.getElementById('s-online').value,
+  })});
+  flash('status-msg','✅ Gespeichert!');loadOverview();
+}
+
+// ── Automod ─────────────────────────────────────────────────────────
+async function loadAutomod(){
+  const gid=firstGuild();
+  if(!gid){document.getElementById('automod-content').innerHTML='<div class="empty">Kein Server gefunden.</div>';return;}
+  try{
+    const data=await api('/api/automod');
+    const cfg=data[gid]||{enabled:false,blockInvites:true,blockSpam:true,action:'mute',bannedWords:[]};
+    const words=cfg.bannedWords||[];
+    document.getElementById('automod-content').innerHTML=`
+      <div class="section">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="row"><label>Automod aktiv</label>
+            <label class="toggle"><input type="checkbox" ${cfg.enabled?'checked':''} onchange="patchAm('${gid}',{enabled:this.checked})"><span class="slider"></span></label>
+          </div>
+          <div class="row"><label>Invite-Links blocken</label>
+            <label class="toggle"><input type="checkbox" ${cfg.blockInvites?'checked':''} onchange="patchAm('${gid}',{blockInvites:this.checked})"><span class="slider"></span></label>
+          </div>
+          <div class="row"><label>Spam-Schutz</label>
+            <label class="toggle"><input type="checkbox" ${cfg.blockSpam?'checked':''} onchange="patchAm('${gid}',{blockSpam:this.checked})"><span class="slider"></span></label>
+          </div>
+          <div class="row"><label>Aktion bei Verstoß</label>
+            <select onchange="patchAm('${gid}',{action:this.value})">
+              <option value="warn" ${cfg.action==='warn'?'selected':''}>Nur Warnen</option>
+              <option value="mute" ${cfg.action==='mute'?'selected':''}>Mute</option>
+              <option value="kick" ${cfg.action==='kick'?'selected':''}>Kick</option>
+            </select>
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="color:var(--muted);font-size:.88rem">Verbotene Wörter (${words.length})</span>
+              <button class="btn btn-ghost btn-sm" onclick="resetWords('${gid}')">↺ Standard-Liste</button>
+            </div>
+            <div class="tag-cloud" id="word-cloud"></div>
+            <div class="row" style="margin-top:10px">
+              <input type="text" id="new-word" placeholder="Neues Wort..." style="flex:1" onkeydown="if(event.key==='Enter')addWord('${gid}')">
+              <button class="btn btn-primary btn-sm" onclick="addWord('${gid}')">+ Hinzufügen</button>
+            </div>
+            <span class="success" id="am-msg" style="display:block;margin-top:6px"></span>
+          </div>
+        </div>
+      </div>`;
+    renderWords(gid,words);
+  }catch(e){showErr('automod-content',e.message);}
+}
+async function patchAm(gid,patch){
+  await api(`/api/automod/${gid}`,{method:'POST',body:JSON.stringify(patch)});
+  flash('am-msg','✅ Gespeichert.');
+}
+async function addWord(gid){
+  const inp=document.getElementById('new-word'),w=inp.value.trim();if(!w)return;
+  const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'add',word:w})});
+  inp.value='';renderWords(gid,r.words);flash('am-msg','✅ Hinzugefügt.');
+}
+function removeWordBtn(btn){removeWord(btn.dataset.gid,decodeURIComponent(btn.dataset.word));}
+async function removeWord(gid,word){
+  const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'remove',word})});
+  renderWords(gid,r.words);
+}
+async function resetWords(gid){
+  if(!confirm('Wortliste auf Standard zurücksetzen?'))return;
+  const r=await api(`/api/automod/${gid}/words`,{method:'POST',body:JSON.stringify({action:'reset'})});
+  renderWords(gid,r.words);flash('am-msg',`✅ ${r.words.length} Standard-Wörter geladen.`);
+}
+function renderWords(gid,words){
+  const c=document.getElementById('word-cloud');if(!c)return;
+  c.innerHTML=words.map(w=>{
+    const enc=encodeURIComponent(w);
+    return `<span class="tag">${w.replace(/</g,'&lt;')}<span class="x" data-gid="${gid}" data-word="${enc}" onclick="removeWordBtn(this)">✕</span></span>`;
+  }).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Wörter</span>';
+}
+
+// ── Embed Builder ───────────────────────────────────────────────────
+async function loadEmbedPage(){
+  const gid=firstGuild();if(!gid)return;
+  await loadGuildData(gid);
+  document.getElementById('emb-channel').innerHTML=chOptions(gid);
+  updatePreview();
+}
+function updatePreview(){
+  const v=id=>document.getElementById(id)?.value||'';
+  const title=v('emb-title');
+  const desc=v('emb-desc').split('\\n').join('\n');
+  const color=v('emb-color')||'#5865f2';
+  const img=v('emb-img'),thumb=v('emb-thumb'),footer=v('emb-footer'),content=v('emb-content');
+  document.getElementById('embed-preview-wrap').style.borderLeftColor=color;
+  const setH=(id,val)=>{const e=document.getElementById(id);if(!e)return;e.style.display=val?'block':'none';if(val)e.textContent=val;};
+  setH('ep-title',title);
+  setH('ep-desc',desc);
+  setH('ep-footer',footer?footer+' • Heute':null);
+  const ep=document.getElementById('ep-img');if(ep){ep.src=img||'';ep.style.display=img?'block':'none';}
+  const et=document.getElementById('ep-thumb');if(et){et.src=thumb||'';et.style.display=thumb?'block':'none';}
+  const ep2=document.getElementById('embed-plain-preview');if(ep2){ep2.textContent=content;ep2.style.display=content?'block':'none';}
+}
+async function sendEmbed(){
+  const channelId=document.getElementById('emb-channel')?.value;
+  if(!channelId)return alert('Keinen Channel ausgewählt.');
+  const body={channelId,
+    title:document.getElementById('emb-title').value,
+    description:document.getElementById('emb-desc').value,
+    color:document.getElementById('emb-color').value,
+    imageUrl:document.getElementById('emb-img').value,
+    thumbnailUrl:document.getElementById('emb-thumb').value,
+    footer:document.getElementById('emb-footer').value,
+    content:document.getElementById('emb-content').value,
+    timestamp:document.getElementById('emb-ts')?.checked!==false};
+  const r=await api('/api/embed',{method:'POST',body:JSON.stringify(body)});
+  if(r.ok)flash('emb-msg','✅ Gesendet!');else alert('Fehler: '+r.error);
+}
+
+// ── Tickets ─────────────────────────────────────────────────────────
+async function loadTickets(){
+  const gid=firstGuild();if(!gid)return;
+  try{
+    await loadGuildData(gid);
+    const data=await api('/api/tickets');
+    const cfg=data[gid]||{supportRoleId:'',categories:[]};
+    const cats=cfg.categories||[];
+    const catRows=cats.map(c=>`<tr>
+      <td><span class="prefix-badge">${c.prefix}</span></td>
+      <td>${c.emoji||'–'}</td>
+      <td>${c.label}${c.description?`<div style="font-size:.78rem;color:var(--muted)">${c.description}</div>`:''}</td>
+      <td>${c.hasForm&&c.formFields?.length?`✅ <span style="color:var(--muted);font-size:.78rem">${c.formFields.length} Feld${c.formFields.length!==1?'er':''}</span>`:(c.hasForm?'✅':'–')}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-cat="${encodeURIComponent(JSON.stringify(c))}" onclick="editCatBtn(this)">✏️</button>
+        <button class="btn btn-danger btn-sm" data-gid="${gid}" data-prefix="${c.prefix}" onclick="removeCatBtn(this)">✕</button>
+      </div></td></tr>`).join('');
+    document.getElementById('tickets-content').innerHTML=`
+      <div class="section"><h2>Support-Rolle</h2>
+        <div class="row">
+          <select id="tk-role">${roleOptions(gid,cfg.supportRoleId)}</select>
+          <button class="btn btn-primary btn-sm" onclick="saveTicketConfig('${gid}')">Speichern</button>
+          <span class="success" id="tk-msg"></span>
+        </div>
+      </div>
+      <div class="section"><h2>Ticket-Kategorien</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Nach Änderungen /ticket-setup erneut ausführen.</p>
+        <table style="margin-bottom:16px"><tr><th>Prefix</th><th>Emoji</th><th>Label</th><th>Formular</th><th></th></tr>
+          ${catRows||'<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--muted)">Keine Kategorien – Bot benutzt einfachen Button</td></tr>'}
+        </table>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px">
+          <div style="font-size:.88rem;font-weight:600;margin-bottom:12px" id="cat-form-title">➕ Neue Kategorie</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <div><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Prefix (max 4)</div><input type="text" id="cat-prefix" placeholder="k" style="width:70px" maxlength="4"></div>
+            <div><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Emoji</div><input type="text" id="cat-emoji" placeholder="🎫" style="width:70px"></div>
+            <div style="flex:1;min-width:140px"><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Label *</div><input type="text" id="cat-label" placeholder="z.B. Kooperation" style="width:100%"></div>
+            <div style="flex:1;min-width:140px"><div style="font-size:.78rem;color:var(--muted);margin-bottom:3px">Beschreibung</div><input type="text" id="cat-desc" placeholder="Optional" style="width:100%"></div>
+          </div>
+          <div class="row" style="margin-bottom:12px">
+            <label style="min-width:unset;font-size:.85rem;color:var(--muted)">Formular beim Öffnen zeigen</label>
+            <label class="toggle"><input type="checkbox" id="cat-form-toggle" onchange="toggleFormFields()"><span class="slider"></span></label>
+          </div>
+          <div id="cat-form-fields" style="display:none;margin-bottom:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:.85rem;font-weight:600">Formularfelder <span style="color:var(--muted);font-weight:400">(max. 5)</span></span>
+              <button class="btn btn-ghost btn-sm" onclick="addFormField()">+ Feld hinzufügen</button>
+            </div>
+            <div id="field-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary btn-sm" onclick="addCat('${gid}')">Speichern</button>
+            <button class="btn btn-ghost btn-sm" id="cat-cancel" onclick="resetCatForm()" style="display:none">Abbrechen</button>
+            <span class="success" id="cat-msg"></span>
+          </div>
+          <input type="hidden" id="cat-edit-prefix">
+        </div>
+      </div>`;
+  }catch(e){showErr('tickets-content',e.message);}
+}
+async function saveTicketConfig(gid){
+  const role=document.getElementById('tk-role').value;
+  await api(`/api/tickets/${gid}/config`,{method:'POST',body:JSON.stringify({supportRoleId:role})});
+  flash('tk-msg','✅ Gespeichert.');
+}
+function editCatBtn(btn){editCat(btn.dataset.gid,JSON.parse(decodeURIComponent(btn.dataset.cat)));}
+function removeCatBtn(btn){removeCat(btn.dataset.gid,btn.dataset.prefix);}
+function editCat(gid,cat){
+  document.getElementById('cat-prefix').value=cat.prefix;
+  document.getElementById('cat-emoji').value=cat.emoji||'';
+  document.getElementById('cat-label').value=cat.label;
+  document.getElementById('cat-desc').value=cat.description||'';
+  document.getElementById('cat-form-toggle').checked=!!cat.hasForm;
+  // formFields laden (backward compat: alte formField1/2 konvertieren)
+  if(cat.formFields?.length){
+    catFormFields=cat.formFields.map(f=>({...f}));
+  } else if(cat.formField1){
+    catFormFields=[
+      {label:cat.formField1,style:'short',required:true,placeholder:''},
+      ...(cat.formField2?[{label:cat.formField2,style:'long',required:false,placeholder:''}]:[])
+    ];
+  } else {
+    catFormFields=[];
+  }
+  toggleFormFields();
+  document.getElementById('cat-edit-prefix').value=cat.prefix;
+  document.getElementById('cat-cancel').style.display='';
+  document.getElementById('cat-form-title').textContent='✏️ Kategorie bearbeiten';
+  document.getElementById('cat-prefix').focus();
+}
+function toggleFormFields(){
+  const show=document.getElementById('cat-form-toggle').checked;
+  document.getElementById('cat-form-fields').style.display=show?'block':'none';
+  if(show&&catFormFields.length===0)addFormField();
+  else renderFieldList();
+}
+function addFormField(){
+  if(catFormFields.length>=5)return;
+  catFormFields.push({label:'',style:'short',required:true,placeholder:''});
+  renderFieldList();
+}
+function removeFormField(i){
+  catFormFields.splice(i,1);
+  renderFieldList();
+}
+function renderFieldList(){
+  const list=document.getElementById('field-list');if(!list)return;
+  if(!catFormFields.length){list.innerHTML='<div style="color:var(--muted);font-size:.82rem;padding:8px">Noch keine Felder. Klick auf "+ Feld hinzufügen".</div>';return;}
+  list.innerHTML=catFormFields.map((f,i)=>`
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:.78rem;color:var(--muted);min-width:30px">Feld ${i+1}</span>
+        <input type="text" placeholder="Feldname *" value="${f.label.replace(/"/g,'&quot;')}" oninput="catFormFields[${i}].label=this.value" style="flex:1">
+        <button class="btn btn-danger btn-sm" onclick="removeFormField(${i})" style="flex-shrink:0">✕</button>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:.82rem;color:var(--muted)">Typ:</span>
+          <select onchange="catFormFields[${i}].style=this.value" style="font-size:.82rem">
+            <option value="short" ${f.style==='short'?'selected':''}>Einzeilig</option>
+            <option value="long" ${f.style==='long'?'selected':''}>Mehrzeilig</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:.82rem;color:var(--muted)">Pflicht:</span>
+          <label class="toggle" style="margin:0"><input type="checkbox" ${f.required?'checked':''} onchange="catFormFields[${i}].required=this.checked"><span class="slider"></span></label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:160px">
+          <span style="font-size:.82rem;color:var(--muted);white-space:nowrap">Placeholder:</span>
+          <input type="text" placeholder="Optional" value="${(f.placeholder||'').replace(/"/g,'&quot;')}" oninput="catFormFields[${i}].placeholder=this.value" style="flex:1;font-size:.82rem">
+        </div>
+      </div>
+    </div>`).join('');
+}
+function resetCatForm(){
+  ['cat-prefix','cat-emoji','cat-label','cat-desc','cat-edit-prefix'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const ft=document.getElementById('cat-form-toggle');if(ft)ft.checked=false;
+  catFormFields=[];
+  toggleFormFields();
+  const cc=document.getElementById('cat-cancel');if(cc)cc.style.display='none';
+  const ct=document.getElementById('cat-form-title');if(ct)ct.textContent='➕ Neue Kategorie';
+}
+async function addCat(gid){
+  const prefix=(document.getElementById('cat-prefix').value||'').trim();
+  const label=(document.getElementById('cat-label').value||'').trim();
+  if(!prefix||!label){alert('Prefix und Label sind Pflichtfelder.');return;}
+  const description=(document.getElementById('cat-desc').value||'').trim();
+  const emoji=(document.getElementById('cat-emoji').value||'').trim();
+  const hasForm=document.getElementById('cat-form-toggle').checked;
+  const editPrefix=(document.getElementById('cat-edit-prefix').value||'').trim();
+  // Felder validieren
+  if(hasForm){
+    const invalid=catFormFields.find(f=>!f.label.trim());
+    if(invalid){alert('Alle Felder brauchen einen Namen.');return;}
+  }
+  const formFields=hasForm?catFormFields.filter(f=>f.label.trim()).map(f=>({
+    label:f.label.trim(), style:f.style||'short', required:!!f.required, placeholder:f.placeholder||''
+  })):[];
+  if(editPrefix&&editPrefix!==prefix){
+    await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix:editPrefix})});
+  }
+  const r=await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description,emoji,hasForm,formFields})});
+  if(r.error){alert('Fehler: '+r.error);return;}
+  resetCatForm();loadTickets();
+}
+async function removeCat(gid,prefix){
+  if(!confirm('Kategorie löschen?'))return;
+  await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix})});
+  loadTickets();
+}
+
+// ── Social Media ─────────────────────────────────────────────────────
+async function loadSocial(){
+  const gid=firstGuild();if(!gid)return;
+  try{
+    await loadGuildData(gid);
+    const data=await api('/api/social');
+    const entries=data[gid]||[];
+    const bc={youtube:'badge-yt',twitch:'badge-tw',tiktok:'badge-tt'};
+    const rows=entries.map(e=>`<tr>
+      <td><span class="badge ${bc[e.platform]||''}">${e.platform}</span></td>
+      <td>${e.handle}</td><td>${chName(gid,e.channelId)}</td>
+      <td style="color:var(--muted);font-size:.82rem">${e.message||'–'}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-entry="${encodeURIComponent(JSON.stringify(e))}" onclick="editSocialBtn(this)">✏️</button>
+        <button class="btn btn-danger btn-sm" data-gid="${gid}" data-platform="${e.platform}" data-handle="${encodeURIComponent(e.handle)}" onclick="removeSocialBtn(this)">✕</button>
+      </div></td></tr>`).join('');
+    document.getElementById('social-content').innerHTML=`
+      <div class="section"><h2>Aktive Benachrichtigungen</h2>
+        ${entries.length?`<table><tr><th>Plattform</th><th>Handle</th><th>Channel</th><th>Nachricht</th><th></th></tr>${rows}</table>`:'<div class="empty">Keine Benachrichtigungen aktiv.</div>'}
+      </div>
+      <div class="section">
+        <h2 id="soc-form-title">Neue Benachrichtigung</h2>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="row"><label>Plattform</label>
+            <select id="soc-platform"><option value="youtube">YouTube</option><option value="twitch">Twitch</option><option value="tiktok">TikTok</option></select>
+          </div>
+          <div class="row"><label>Handle / ID</label><input type="text" id="soc-handle" placeholder="YouTube: UCxxx… | Twitch/TikTok: username" style="width:300px"></div>
+          <div class="row"><label>Discord-Channel</label><select id="soc-channel">${chOptions(gid)}</select></div>
+          <div class="row"><label>Custom Nachricht</label><input type="text" id="soc-msg" placeholder="{name} hat gepostet! (optional)" style="width:300px"></div>
+          <input type="hidden" id="soc-edit-handle">
+          <div class="row">
+            <button class="btn btn-primary" onclick="addSocial('${gid}')">+ Speichern</button>
+            <button class="btn btn-ghost" id="soc-cancel" onclick="resetSocForm()" style="display:none">Abbrechen</button>
+            <span class="success" id="soc-success"></span>
+          </div>
+        </div>
+      </div>`;
+  }catch(e){showErr('social-content',e.message);}
+}
+function editSocialBtn(btn){editSocial(btn.dataset.gid,JSON.parse(decodeURIComponent(btn.dataset.entry)));}
+function removeSocialBtn(btn){removeSocial(btn.dataset.gid,btn.dataset.platform,decodeURIComponent(btn.dataset.handle));}
+function editSocial(gid,e){
+  document.getElementById('soc-platform').value=e.platform;
+  document.getElementById('soc-handle').value=e.handle;
+  const ch=document.getElementById('soc-channel');
+  if(ch)for(let o of ch.options)if(o.value===e.channelId)o.selected=true;
+  document.getElementById('soc-msg').value=e.message||'';
+  document.getElementById('soc-edit-handle').value=e.handle;
+  document.getElementById('soc-cancel').style.display='';
+  const ft=document.getElementById('soc-form-title');if(ft)ft.textContent='Benachrichtigung bearbeiten';
+}
+function resetSocForm(){
+  ['soc-handle','soc-msg','soc-edit-handle'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const cc=document.getElementById('soc-cancel');if(cc)cc.style.display='none';
+  const ft=document.getElementById('soc-form-title');if(ft)ft.textContent='Neue Benachrichtigung';
+}
+async function addSocial(gid){
+  const platform=document.getElementById('soc-platform').value;
+  const handle=(document.getElementById('soc-handle').value||'').trim();
+  const channelId=document.getElementById('soc-channel').value;
+  const message=(document.getElementById('soc-msg').value||'').trim();
+  const editHandle=(document.getElementById('soc-edit-handle').value||'').trim();
+  if(!handle){alert('Handle/ID eingeben.');return;}
+  if(editHandle&&editHandle!==handle){
+    await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'remove',platform,handle:editHandle})});
+  }
+  await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'add',platform,handle,channelId,message:message||null})});
+  resetSocForm();flash('soc-success','✅ Gespeichert.');loadSocial();
+}
+async function removeSocial(gid,platform,handle){
+  if(!confirm(`${platform}/${handle} entfernen?`))return;
+  await api(`/api/social/${gid}`,{method:'POST',body:JSON.stringify({action:'remove',platform,handle})});
+  loadSocial();
+}
+
+// ── Verwarnungen ─────────────────────────────────────────────────────
+async function loadWarnings(){
+  const gid=firstGuild();if(!gid)return;
+  try{
+    const data=await api('/api/warnings');
+    const users=data[gid]||{};
+    const ids=Object.keys(users);
+    if(!ids.length){document.getElementById('warnings-content').innerHTML='<div class="empty">Keine Verwarnungen.</div>';return;}
+    let names={};
+    try{names=await api('/api/users/bulk',{method:'POST',body:JSON.stringify({ids})});}catch(e){}
+    const rows=ids.map(uid=>{
+      const warns=users[uid];
+      const name=names[uid]||uid;
+      return `<tr>
+        <td><strong>${name}</strong><br><code style="font-size:.72rem;color:var(--muted)">${uid}</code></td>
+        <td>${warns.length}</td>
+        <td>${warns.map(w=>`<div style="font-size:.8rem;color:var(--muted)">${w.reason}</div>`).join('')}</td>
+        <td><button class="btn btn-danger btn-sm" data-gid="${gid}" data-uid="${uid}" onclick="delWarnBtn(this)">Löschen</button></td></tr>`;
+    }).join('');
+    document.getElementById('warnings-content').innerHTML=
+      `<div class="section"><table><tr><th>User</th><th>Anzahl</th><th>Gründe</th><th></th></tr>${rows}</table></div>`;
+  }catch(e){showErr('warnings-content',e.message);}
+}
+function delWarnBtn(btn){delWarn(btn.dataset.gid,btn.dataset.uid);}
+async function delWarn(gid,uid){
+  await api(`/api/warnings/${gid}/${uid}`,{method:'DELETE'});
+  loadWarnings();
+}
+</script>
+</body>
+</html>
