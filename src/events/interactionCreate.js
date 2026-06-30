@@ -74,16 +74,18 @@ module.exports = {
       const category  = guildData?.categories?.find(c => c.prefix === prefix);
 
       if (category?.hasForm) {
+        const field1Label = category.formField1 || 'Betreff';
+        const field2Label = category.formField2 || 'Beschreibung';
         const modal = new ModalBuilder()
           .setCustomId(`ticket_modal_${prefix}`)
-          .setTitle(category.label)
+          .setTitle(category.label.slice(0, 45))
           .addComponents(
             new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('subject').setLabel('Betreff').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)
+              new TextInputBuilder().setCustomId('subject').setLabel(field1Label.slice(0, 45)).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)
             ),
             new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('description').setLabel('Beschreibung').setStyle(TextInputStyle.Paragraph)
-                .setRequired(false).setPlaceholder('Was ist dein Anliegen?').setMaxLength(1000)
+              new TextInputBuilder().setCustomId('description').setLabel(field2Label.slice(0, 45)).setStyle(TextInputStyle.Paragraph)
+                .setRequired(false).setMaxLength(1000)
             )
           );
         return interaction.showModal(modal);
