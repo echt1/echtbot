@@ -139,7 +139,7 @@ function startDashboard(client) {
   });
 
   app.post('/api/tickets/:gid/categories', auth, (req, res) => {
-    const { action, label, prefix, description, emoji, hasForm, formField1, formField2 } = req.body;
+    const { action, label, prefix, description, emoji, hasForm, formFields } = req.body;
     const tickets = db.get('tickets');
     const gid = req.params.gid;
     tickets[gid] = tickets[gid] || { tickets: {}, categories: [] };
@@ -147,14 +147,21 @@ function startDashboard(client) {
     if (action === 'add' && label && prefix) {
       const p = prefix.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,4);
       if (p) {
+        const cleanFields = Array.isArray(formFields)
+          ? formFields.filter(f => f && f.label).slice(0, 5).map(f => ({
+              label: String(f.label).slice(0, 45),
+              style: f.style === 'long' ? 'long' : 'short',
+              required: !!f.required,
+              placeholder: String(f.placeholder || '').slice(0, 100),
+            }))
+          : [];
         const newEntry = {
-          label, prefix: p, description: description || '', emoji: emoji || '', hasForm: !!hasForm,
-          formField1: formField1 || 'Betreff',
-          formField2: formField2 || 'Beschreibung',
+          label, prefix: p, description: description || '', emoji: emoji || '',
+          hasForm: !!hasForm, formFields: cleanFields,
         };
         const idx = tickets[gid].categories.findIndex(c => c.prefix === p);
-        if (idx !== -1) tickets[gid].categories[idx] = newEntry; // Update bestehender Eintrag
-        else tickets[gid].categories.push(newEntry); // Neuer Eintrag
+        if (idx !== -1) tickets[gid].categories[idx] = newEntry;
+        else tickets[gid].categories.push(newEntry);
       }
     } else if (action === 'remove' && prefix) {
       tickets[gid].categories = tickets[gid].categories.filter(c => c.prefix !== prefix);
