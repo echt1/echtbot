@@ -38,7 +38,9 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData)
     ? `Hallo ${interaction.user}, du hast ein **${categoryLabel}**-Ticket geöffnet.\nEin Teammitglied kümmert sich gleich um dich.`
     : `Hallo ${interaction.user}, ein Teammitglied kümmert sich gleich um dich.`;
 
-  if (formData) desc += `\n\n**Betreff:** ${formData.subject}${formData.description ? `\n**Beschreibung:** ${formData.description}` : ''}`;
+  if (formData?.length) {
+    desc += '\n\n' + formData.map(f => `**${f.label}:** ${f.value || '–'}`).join('\n');
+  }
 
   const embed = new EmbedBuilder().setColor(0x2ECC71).setTitle('🎫 Neues Ticket').setDescription(desc);
   const closeRow = new ActionRowBuilder().addComponents(
@@ -73,19 +75,21 @@ module.exports = {
       const guildData = db.get('tickets')[interaction.guild.id];
       const category  = guildData?.categories?.find(c => c.prefix === prefix);
 
-      if (category?.hasForm) {
-        const field1Label = category.formField1 || 'Betreff';
-        const field2Label = category.formField2 || 'Beschreibung';
+      if (category?.hasForm && category.formFields?.length) {
         const modal = new ModalBuilder()
           .setCustomId(`ticket_modal_${prefix}`)
           .setTitle(category.label.slice(0, 45))
           .addComponents(
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('subject').setLabel(field1Label.slice(0, 45)).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)
-            ),
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('description').setLabel(field2Label.slice(0, 45)).setStyle(TextInputStyle.Paragraph)
-                .setRequired(false).setMaxLength(1000)
+            category.formFields.slice(0, 5).map((f, i) =>
+              new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                  .setCustomId(`field_${i}`)
+                  .setLabel(f.label.slice(0, 45))
+                  .setStyle(f.style === 'long' ? TextInputStyle.Paragraph : TextInputStyle.Short)
+                  .setRequired(!!f.required)
+                  .setPlaceholder((f.placeholder||'').slice(0,100)||undefined)
+                  .setMaxLength(f.style === 'long' ? 1000 : 200)
+              )
             )
           );
         return interaction.showModal(modal);
@@ -99,9 +103,15 @@ module.exports = {
       const prefix    = interaction.customId.replace('ticket_modal_', '');
       const guildData = db.get('tickets')[interaction.guild.id];
       const category  = guildData?.categories?.find(c => c.prefix === prefix);
-      const subject     = interaction.fields.getTextInputValue('subject');
-      const description = interaction.fields.getTextInputValue('description').catch?.(() => '') || interaction.fields.getTextInputValue('description');
-      return createTicketChannel(interaction, prefix, category?.label || prefix, { subject, description });
+      const fields    = category?.formFields || [];
+
+      const formData = fields.map((f, i) => {
+        let value = '';
+        try { value = interaction.fields.getTextInputValue(`field_${i}`); } catch { value = ''; }
+        return { label: f.label, value };
+      });
+
+      return createTicketChannel(interaction, prefix, category?.label || prefix, formData);
     }
 
     // ── Ticket: Button (kein Kategorien-Setup) ──────────────────────
