@@ -31,7 +31,12 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData)
   });
 
   guildData.tickets = guildData.tickets || {};
-  guildData.tickets[ticketChannel.id] = { userId: interaction.user.id, openedAt: Date.now(), category: categoryLabel || null };
+  guildData.tickets[ticketChannel.id] = {
+    userId: interaction.user.id,
+    openedAt: Date.now(),
+    category: categoryLabel || null,
+    claimedBy: null,
+  };
   db.set('tickets', guildConfig);
 
   let desc = categoryLabel
@@ -43,11 +48,13 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData)
   }
 
   const embed = new EmbedBuilder().setColor(0x2ECC71).setTitle('🎫 Neues Ticket').setDescription(desc);
-  const closeRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket_close_btn').setLabel('Ticket schließen').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('ticket_claim_btn').setLabel('Ticket übernehmen').setStyle(ButtonStyle.Success).setEmoji('📋'),
+    new ButtonBuilder().setCustomId('ticket_close_btn').setLabel('Ticket schließen').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
   );
 
-  await ticketChannel.send({ content: `<@&${guildData.supportRoleId}> <@${interaction.user.id}>`, embeds: [embed], components: [closeRow] });
+  await ticketChannel.send({ content: `<@&${guildData.supportRoleId}> <@${interaction.user.id}>`, embeds: [embed], components: [row] });
   await interaction.editReply({ content: `✅ Dein Ticket wurde erstellt: ${ticketChannel}` });
 }
 
@@ -71,24 +78,25 @@ module.exports = {
 
     // ── Ticket: Select-Menu ─────────────────────────────────────────
     if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_category') {
-      const prefix   = interaction.values[0];
+      const prefix    = interaction.values[0];
       const guildData = db.get('tickets')[interaction.guild.id];
       const category  = guildData?.categories?.find(c => c.prefix === prefix);
 
       if (category?.hasForm && category.formFields?.length) {
-        const modal = new ModalBuilder()
+        const fields = category.formFields.slice(0, 5);
+        const modal  = new ModalBuilder()
           .setCustomId(`ticket_modal_${prefix}`)
           .setTitle(category.label.slice(0, 45))
           .addComponents(
-            category.formFields.slice(0, 5).map((f, i) =>
+            ...fields.map((field, i) =>
               new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
                   .setCustomId(`field_${i}`)
-                  .setLabel(f.label.slice(0, 45))
-                  .setStyle(f.style === 'long' ? TextInputStyle.Paragraph : TextInputStyle.Short)
-                  .setRequired(!!f.required)
-                  .setPlaceholder((f.placeholder||'').slice(0,100)||undefined)
-                  .setMaxLength(f.style === 'long' ? 1000 : 200)
+                  .setLabel(field.label.slice(0, 45))
+                  .setStyle(field.style === 'long' ? TextInputStyle.Paragraph : TextInputStyle.Short)
+                  .setRequired(field.required !== false)
+                  .setPlaceholder((field.placeholder || '').slice(0, 100) || undefined)
+                  .setMaxLength(field.style === 'long' ? 1000 : 200)
               )
             )
           );
@@ -104,19 +112,58 @@ module.exports = {
       const guildData = db.get('tickets')[interaction.guild.id];
       const category  = guildData?.categories?.find(c => c.prefix === prefix);
       const fields    = category?.formFields || [];
-
-      const formData = fields.map((f, i) => {
+      const formData  = fields.map((f, i) => {
         let value = '';
         try { value = interaction.fields.getTextInputValue(`field_${i}`); } catch { value = ''; }
         return { label: f.label, value };
       });
-
       return createTicketChannel(interaction, prefix, category?.label || prefix, formData);
     }
 
     // ── Ticket: Button (kein Kategorien-Setup) ──────────────────────
     if (interaction.isButton() && interaction.customId === 'ticket_open') {
       return createTicketChannel(interaction, null, null, null);
+    }
+
+    // ── Ticket: Claim ───────────────────────────────────────────────
+    if (interaction.isButton() && interaction.customId === 'ticket_claim_btn') {
+      const guildConfig = db.get('tickets');
+      const guildData   = guildConfig[interaction.guild.id];
+      const ticketInfo  = guildData?.tickets?.[interaction.channel.id];
+
+      if (!ticketInfo) return interaction.reply({ content: '❌ Dies ist kein Ticket-Channel.', ephemeral: true });
+
+      if (ticketInfo.claimedBy) {
+        return interaction.reply({
+          content: `❌ Dieses Ticket ist bereits von <@${ticketInfo.claimedBy}> übernommen.`,
+          ephemeral: true,
+        });
+      }
+
+      ticketInfo.claimedBy = interaction.user.id;
+      db.set('tickets', guildConfig);
+
+      // Button aktualisieren: Claim-Button deaktivieren und Label ändern
+      const msg = interaction.message;
+      const updatedRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('ticket_claim_btn')
+          .setLabel(`Übernommen von ${interaction.user.username}`)
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('📋')
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId('ticket_close_btn')
+          .setLabel('Ticket schließen')
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji('🔒'),
+      );
+      await msg.edit({ components: [updatedRow] }).catch(() => {});
+
+      await interaction.reply({
+        content: `📋 ${interaction.user} hat dieses Ticket übernommen.`,
+      });
+      return;
     }
 
     // ── Ticket schließen ────────────────────────────────────────────
