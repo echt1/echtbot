@@ -205,6 +205,23 @@ function startDashboard(client) {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // ── Einstellungen (JoinRole etc.) ─────────────────────────────────────
+  app.get('/api/settings', auth, (req, res) => {
+    const cfg = db.get('automod');
+    const gid = Object.keys(client.guilds.cache)[0];
+    res.json({ joinRoleId: cfg[gid]?.joinRoleId || null });
+  });
+
+  app.post('/api/settings/:gid/joinrole', auth, (req, res) => {
+    const { roleId } = req.body;
+    const cfg = db.get('automod');
+    cfg[req.params.gid] = cfg[req.params.gid] || {};
+    if (roleId) cfg[req.params.gid].joinRoleId = roleId;
+    else delete cfg[req.params.gid].joinRoleId;
+    db.set('automod', cfg);
+    res.json({ ok: true });
+  });
+
   // ── User-Namen ────────────────────────────────────────────────────────
   app.post('/api/users/bulk', auth, async (req, res) => {
     const { ids } = req.body;
