@@ -159,7 +159,7 @@ async function runCheck(client) {
           });
           embed.setImage(result.thumbnail);
           const ts = result.publishedAt ? Math.floor(new Date(result.publishedAt).getTime() / 1000) : Math.floor(Date.now() / 1000);
-          embed.setFooter({ text: 'Upload • ', iconURL: 'https://look.jmgbb.com/images/NyiKLMt5Mw.png' });
+          embed.setFooter({ text: 'Upload', iconURL: 'https://look.jmgbb.com/images/NyiKLMt5Mw.png' });
           embed.setTimestamp(result.publishedAt ? new Date(result.publishedAt) : new Date());
         } else if (result.kind === 'twitch') {
           embed.setAuthor({ name: `${result.name} ist jetzt live!` });
