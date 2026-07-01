@@ -121,12 +121,12 @@ function updateUploadStatus(client, result) {
       return;
     }
     toggle = !toggle;
-    const text = toggle ? `🔴 NEUES VIDEO DRAUSSEN!` : `▶️ Neues Video – Jetzt anschauen!`;
+    const text = toggle ? `NEUER UPLOAD!` : ``;
     client.user.setPresence({ activities: [{ name: text, type: ActivityType.Watching }], status: 'online' });
   }, 15_000); // alle 15 Sekunden wechseln
 
   // Sofort setzen
-  client.user.setPresence({ activities: [{ name: '🔴 NEUES VIDEO DRAUSSEN!', type: ActivityType.Watching }], status: 'online' });
+  client.user.setPresence({ activities: [{ name: 'NEUER UPLOAD!', type: ActivityType.Watching }], status: 'online' });
 }
 
 // ---------- Haupt-Check ----------
@@ -159,7 +159,7 @@ async function runCheck(client) {
           });
           embed.setImage(result.thumbnail);
           const ts = result.publishedAt ? Math.floor(new Date(result.publishedAt).getTime() / 1000) : Math.floor(Date.now() / 1000);
-          embed.setFooter({ text: '▶️ YouTube • Upload', iconURL: 'https://www.youtube.com/favicon.ico' });
+          embed.setFooter({ text: 'Upload • ', iconURL: 'https://look.jmgbb.com/images/NyiKLMt5Mw.png' });
           embed.setTimestamp(result.publishedAt ? new Date(result.publishedAt) : new Date());
         } else if (result.kind === 'twitch') {
           embed.setAuthor({ name: `${result.name} ist jetzt live!` });
