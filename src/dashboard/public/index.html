@@ -98,6 +98,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <div class="nav-item" onclick="nav('tickets',this)">🎫 Tickets</div>
     <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
     <div class="nav-item" onclick="nav('warnings',this)">⚠️ Verwarnungen</div>
+    <div class="nav-item" onclick="nav('settings',this)">⚙️ Einstellungen</div>
   </nav>
   <main class="main">
 
@@ -196,6 +197,12 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
       <div id="warnings-content"><div class="empty">Laden...</div></div>
     </div>
 
+    <!-- Einstellungen -->
+    <div id="page-settings" class="page">
+      <h1 class="ptitle">Einstellungen</h1>
+      <div id="settings-content"><div class="empty">Laden...</div></div>
+    </div>
+
   </main>
 </div>
 
@@ -234,7 +241,7 @@ function nav(page,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if(el)el.classList.add('active');
-  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings};
+  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,settings:loadSettings};
   if(loaders[page])loaders[page]();
 }
 
@@ -251,6 +258,32 @@ function chName(gid,id){const c=(chCache[gid]||[]).find(c=>c.id===id);return c?`
 function chOptions(gid,sel=''){return(chCache[gid]||[]).map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>#${c.name}</option>`).join('');}
 function roleOptions(gid,sel=''){return(roleCache[gid]||[]).map(r=>`<option value="${r.id}"${r.id===sel?' selected':''}>${r.name}</option>`).join('');}
 function fmt(s){const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
+// ── Einstellungen ─────────────────────────────────────────────────
+async function loadSettings(){
+  const gid=firstGuild();if(!gid)return;
+  try{
+    await loadGuildData(gid);
+    const data=await api('/api/settings').catch(()=>({}));
+    const joinRoleId=data.joinRoleId||'';
+    document.getElementById('settings-content').innerHTML=`
+      <div class="section"><h2>Join-Rolle</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Diese Rolle wird automatisch an neue Member vergeben, sobald sie dem Server beitreten.</p>
+        <div class="row">
+          <select id="join-role">
+            <option value="">– Keine Join-Rolle –</option>
+            ${roleOptions(gid,joinRoleId)}
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="saveJoinRole('${gid}')">Speichern</button>
+          <span class="success" id="joinrole-msg"></span>
+        </div>
+      </div>`;
+  }catch(e){document.getElementById('settings-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
+}
+async function saveJoinRole(gid){
+  const roleId=document.getElementById('join-role').value;
+  await api(`/api/settings/${gid}/joinrole`,{method:'POST',body:JSON.stringify({roleId:roleId||null})});
+  flash('joinrole-msg','✅ Gespeichert.');
+}
 function flash(id,msg){const el=document.getElementById(id);if(!el)return;el.textContent=msg;setTimeout(()=>el.textContent='',2500);}
 function showErr(id,msg){const el=document.getElementById(id);if(el)el.innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+msg+'</div>';}
 
