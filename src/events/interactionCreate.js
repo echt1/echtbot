@@ -62,8 +62,8 @@ module.exports = {
   name: 'interactionCreate',
   async execute(interaction) {
 
-    // ── Slash Commands ──────────────────────────────────────────────
-    if (interaction.isChatInputCommand()) {
+    // ── Slash + Context Menu Commands ──────────────────────────────
+    if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand() || interaction.isUserContextMenuCommand()) {
       const command = interaction.client.commands.get(interaction.commandName);
       if (!command) return;
       try {
