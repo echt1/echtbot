@@ -151,11 +151,15 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
           <div class="row"><label>Channel:</label><select id="emb-channel"></select></div>
           <div class="row"><label style="white-space:nowrap">Message-ID <span style="color:var(--muted);font-size:.78rem">(leer = neu senden)</span></label><input type="text" id="emb-msgid" placeholder="Optional – zum Bearbeiten" style="width:220px"></div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-          <span style="font-size:.82rem;color:var(--muted)">Presets:</span>
-          <div id="preset-list" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-          <input type="text" id="preset-name" placeholder="Name..." style="width:120px">
-          <button class="btn btn-ghost btn-sm" onclick="savePreset()">💾 Speichern</button>
+        <div style="margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:.88rem;font-weight:600">Presets</span>
+            <div class="row" style="gap:6px">
+              <input type="text" id="preset-name" placeholder="Name..." style="width:130px">
+              <button class="btn btn-ghost btn-sm" onclick="savePreset()">💾 Speichern</button>
+            </div>
+          </div>
+          <div id="preset-list"><span style="color:var(--muted);font-size:.82rem">Keine Presets gespeichert.</span></div>
         </div>
         <div class="embed-wrap">
           <div class="embed-form">
@@ -446,13 +450,19 @@ async function loadPresets(){
   if(!list)return;
   const names=Object.keys(presets);
   if(!names.length){list.innerHTML='<span style="color:var(--muted);font-size:.82rem">Keine Presets</span>';return;}
-  list.innerHTML=names.map(name=>`
-    <span class="tag" style="cursor:pointer" onclick="loadPreset(${JSON.stringify(name)})">${name}
-      <span class="x" onclick="event.stopPropagation();deletePreset(${JSON.stringify(name)})">✕</span>
-    </span>`).join('');
-  // Presets in closure speichern
+  list.innerHTML=`<table style="width:100%;font-size:.88rem;border-collapse:collapse">
+    ${names.map(name=>`<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 12px">${name.replace(/</g,'&lt;')}</td>
+      <td style="padding:8px 4px;color:var(--muted);font-size:.78rem">${(presets[name].title||'–').replace(/</g,'&lt;').slice(0,40)}</td>
+      <td style="padding:8px 4px;text-align:right;white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" data-preset="${encodeURIComponent(name)}" onclick="loadPresetBtn(this)" style="margin-right:4px">Laden</button>
+        <button class="btn btn-danger btn-sm" data-preset="${encodeURIComponent(name)}" onclick="deletePresetBtn(this)">✕</button>
+      </td></tr>`).join('')}
+  </table>`;
   window.__presets=presets;
 }
+function loadPresetBtn(btn){loadPreset(decodeURIComponent(btn.dataset.preset));}
+function deletePresetBtn(btn){deletePreset(decodeURIComponent(btn.dataset.preset));}
 function loadPreset(name){
   const p=window.__presets?.[name];if(!p)return;
   const set=(id,val)=>{const e=document.getElementById(id);if(e)e.value=val||'';};
