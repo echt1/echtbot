@@ -37,7 +37,7 @@ module.exports = {
       )
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply({ embeds: [embed], ephemeral: true });
 
     target.send({ content: `Du wurdest in **${interaction.guild.name}** verwarnt.\nGrund: ${reason}` }).catch(() => {});
   },
