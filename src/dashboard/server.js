@@ -85,7 +85,9 @@ function startDashboard(client) {
 
   app.post('/api/automod/:gid', auth, (req, res) => {
     const data = db.get('automod');
-    data[req.params.gid] = { ...(data[req.params.gid] || {}), ...req.body };
+    const patch = req.body;
+    if (patch.excludedRoles && !Array.isArray(patch.excludedRoles)) delete patch.excludedRoles;
+    data[req.params.gid] = { ...(data[req.params.gid] || {}), ...patch };
     db.set('automod', data);
     res.json({ ok: true });
   });
@@ -187,9 +189,34 @@ function startDashboard(client) {
     res.json({ ok: true });
   });
 
+  // ── Embed Presets ─────────────────────────────────────────────────────
+  app.get('/api/presets', auth, (req, res) => {
+    const data = db.get('automod');
+    res.json(data.__embedPresets || {});
+  });
+
+  app.post('/api/presets', auth, (req, res) => {
+    const { name, preset } = req.body;
+    if (!name || !preset) return res.status(400).json({ error: 'name und preset erforderlich' });
+    const data = db.get('automod');
+    data.__embedPresets = data.__embedPresets || {};
+    data.__embedPresets[name] = preset;
+    db.set('automod', data);
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/presets/:name', auth, (req, res) => {
+    const data = db.get('automod');
+    if (data.__embedPresets) {
+      delete data.__embedPresets[decodeURIComponent(req.params.name)];
+      db.set('automod', data);
+    }
+    res.json({ ok: true });
+  });
+
   // ── Embed ──────────────────────────────────────────────────────────
   app.post('/api/embed', auth, async (req, res) => {
-    const { channelId, title, description, color, imageUrl, thumbnailUrl, footer, content, timestamp } = req.body;
+    const { channelId, messageId, title, description, color, imageUrl, thumbnailUrl, footer, content, timestamp } = req.body;
     try {
       const ch = await client.channels.fetch(channelId).catch(() => null);
       if (!ch) return res.status(404).json({ error: 'Channel nicht gefunden' });
@@ -200,16 +227,26 @@ function startDashboard(client) {
       if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
       if (footer)       embed.setFooter({ text: footer });
       if (timestamp !== false) embed.setTimestamp();
-      await ch.send({ content: content || undefined, embeds: [embed] });
+      if (messageId) {
+        // Bestehende Nachricht bearbeiten
+        const targetMsg = await ch.messages.fetch(messageId).catch(() => null);
+        if (!targetMsg) return res.status(404).json({ error: 'Nachricht nicht gefunden. Stimmt die Message-ID?' });
+        await targetMsg.edit({ embeds: [embed] });
+      } else {
+        await ch.send({ content: content || undefined, embeds: [embed] });
+      }
       res.json({ ok: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
   // ── Einstellungen (JoinRole etc.) ─────────────────────────────────────
-  app.get('/api/settings', auth, (req, res) => {
+  app.get('/api/settings/:gid', auth, (req, res) => {
     const cfg = db.get('automod');
-    const gid = Object.keys(client.guilds.cache)[0];
-    res.json({ joinRoleId: cfg[gid]?.joinRoleId || null });
+    const gid = req.params.gid;
+    res.json({
+      joinRoleId: cfg[gid]?.joinRoleId || null,
+      excludedRoles: cfg[gid]?.excludedRoles || [],
+    });
   });
 
   app.post('/api/settings/:gid/joinrole', auth, (req, res) => {
