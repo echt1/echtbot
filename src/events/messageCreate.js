@@ -13,7 +13,7 @@ async function applyAction(message, config, reason) {
     .setDescription(`${message.author} wurde wegen **${reason}** moderiert.`)
     .setTimestamp();
 
-  message.channel.send({ embeds: [embed] }).catch(() => {});
+  message.channel.send({ embeds: [embed] }).then(msg => setTimeout(() => msg.delete().catch(() => {}), 8000)).catch(() => {});
 
   try {
     if (config.action === 'warn') {
@@ -38,8 +38,10 @@ module.exports = {
   name: 'messageCreate',
   async execute(message) {
     if (message.author.bot || !message.guild) return;
-    // Moderatoren mit ManageGuild von Automod ausnehmen
+    // Moderatoren und ausgeschlossene Rollen von Automod ausnehmen
     if (message.member?.permissions.has('ManageGuild')) return;
+    const excludedRoles = config.excludedRoles || [];
+    if (excludedRoles.length && message.member?.roles.cache.some(r => excludedRoles.includes(r.id))) return;
 
     const automod = db.get('automod');
     const config = automod[message.guild.id];
