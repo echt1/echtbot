@@ -99,6 +99,9 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
     <div class="nav-item" onclick="nav('warnings',this)">⚠️ Verwarnungen</div>
     <div class="nav-item" onclick="nav('settings',this)">⚙️ Einstellungen</div>
+    <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border)">
+      <div class="nav-item" onclick="logout()" style="color:var(--red)">⏻ Abmelden</div>
+    </div>
   </nav>
   <main class="main">
 
@@ -144,8 +147,15 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <div id="page-embed" class="page">
       <h1 class="ptitle">Embed Builder</h1>
       <div class="section">
-        <div class="row" style="margin-bottom:16px">
-          <label>Channel:</label><select id="emb-channel"></select>
+        <div class="row" style="margin-bottom:16px;flex-wrap:wrap;gap:10px">
+          <div class="row"><label>Channel:</label><select id="emb-channel"></select></div>
+          <div class="row"><label style="white-space:nowrap">Message-ID <span style="color:var(--muted);font-size:.78rem">(leer = neu senden)</span></label><input type="text" id="emb-msgid" placeholder="Optional – zum Bearbeiten" style="width:220px"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <span style="font-size:.82rem;color:var(--muted)">Presets:</span>
+          <div id="preset-list" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          <input type="text" id="preset-name" placeholder="Name..." style="width:120px">
+          <button class="btn btn-ghost btn-sm" onclick="savePreset()">💾 Speichern</button>
         </div>
         <div class="embed-wrap">
           <div class="embed-form">
@@ -258,12 +268,31 @@ function chName(gid,id){const c=(chCache[gid]||[]).find(c=>c.id===id);return c?`
 function chOptions(gid,sel=''){return(chCache[gid]||[]).map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>#${c.name}</option>`).join('');}
 function roleOptions(gid,sel=''){return(roleCache[gid]||[]).map(r=>`<option value="${r.id}"${r.id===sel?' selected':''}>${r.name}</option>`).join('');}
 function fmt(s){const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
+// ── Automod excluded roles helpers ─────────────────────────────────
+async function addExclRole(gid){
+  const sel=document.getElementById('excl-role-sel');
+  const rid=sel?.value; if(!rid)return;
+  const data=await api('/api/automod');
+  const cfg=data[gid]||{};
+  const roles=[...(cfg.excludedRoles||[])];
+  if(!roles.includes(rid))roles.push(rid);
+  await patchAm(gid,{excludedRoles:roles});
+  loadAutomod();
+}
+function removeExclRole(btn){
+  const gid=btn.dataset.gid, rid=btn.dataset.rid;
+  api('/api/automod').then(data=>{
+    const cfg=data[gid]||{};
+    const roles=(cfg.excludedRoles||[]).filter(id=>id!==rid);
+    patchAm(gid,{excludedRoles:roles}).then(()=>loadAutomod());
+  });
+}
 // ── Einstellungen ─────────────────────────────────────────────────
 async function loadSettings(){
   const gid=firstGuild();if(!gid)return;
   try{
     await loadGuildData(gid);
-    const data=await api('/api/settings').catch(()=>({}));
+    const data=await api(`/api/settings/${gid}`).catch(()=>({}));
     const joinRoleId=data.joinRoleId||'';
     document.getElementById('settings-content').innerHTML=`
       <div class="section"><h2>Join-Rolle</h2>
@@ -283,6 +312,14 @@ async function saveJoinRole(gid){
   const roleId=document.getElementById('join-role').value;
   await api(`/api/settings/${gid}/joinrole`,{method:'POST',body:JSON.stringify({roleId:roleId||null})});
   flash('joinrole-msg','✅ Gespeichert.');
+}
+function logout(){
+  if(!confirm('Wirklich abmelden?'))return;
+  localStorage.removeItem('dash_token');
+  TOKEN='';
+  document.getElementById('app').style.display='none';
+  document.getElementById('login').style.display='flex';
+  document.getElementById('token-input').value='';
 }
 function flash(id,msg){const el=document.getElementById(id);if(!el)return;el.textContent=msg;setTimeout(()=>el.textContent='',2500);}
 function showErr(id,msg){const el=document.getElementById(id);if(el)el.innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+msg+'</div>';}
@@ -320,8 +357,9 @@ async function loadAutomod(){
   const gid=firstGuild();
   if(!gid){document.getElementById('automod-content').innerHTML='<div class="empty">Kein Server gefunden.</div>';return;}
   try{
+    await loadGuildData(gid);
     const data=await api('/api/automod');
-    const cfg=data[gid]||{enabled:false,blockInvites:true,blockSpam:true,action:'mute',bannedWords:[]};
+    const cfg=data[gid]||{enabled:false,blockInvites:true,blockSpam:true,action:'mute',bannedWords:[],excludedRoles:[]};
     const words=cfg.bannedWords||[];
     document.getElementById('automod-content').innerHTML=`
       <div class="section">
@@ -341,6 +379,14 @@ async function loadAutomod(){
               <option value="mute" ${cfg.action==='mute'?'selected':''}>Mute</option>
               <option value="kick" ${cfg.action==='kick'?'selected':''}>Kick</option>
             </select>
+          </div>
+          <div>
+            <div style="font-size:.88rem;color:var(--muted);margin-bottom:6px">Ausgeschlossene Rollen (kein Automod)</div>
+            <div class="tag-cloud" id="excl-role-cloud">${(cfg.excludedRoles||[]).map(id=>{const r=(roleCache['${gid}']||[]).find(r=>r.id===id);return r?`<span class="tag">${r.name}<span class="x" data-gid="${gid}" data-rid="${id}" onclick="removeExclRole(this)">✕</span></span>`:''}).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Ausnahmen</span>'}</div>
+            <div class="row" style="margin-top:8px">
+              <select id="excl-role-sel"><option value="">Rolle auswählen...</option>${roleOptions(gid,'')}</select>
+              <button class="btn btn-ghost btn-sm" onclick="addExclRole('${gid}')">+ Hinzufügen</button>
+            </div>
           </div>
           <div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -392,6 +438,50 @@ async function loadEmbedPage(){
   await loadGuildData(gid);
   document.getElementById('emb-channel').innerHTML=chOptions(gid);
   updatePreview();
+  loadPresets();
+}
+async function loadPresets(){
+  const presets=await api('/api/presets').catch(()=>({}));
+  const list=document.getElementById('preset-list');
+  if(!list)return;
+  const names=Object.keys(presets);
+  if(!names.length){list.innerHTML='<span style="color:var(--muted);font-size:.82rem">Keine Presets</span>';return;}
+  list.innerHTML=names.map(name=>`
+    <span class="tag" style="cursor:pointer" onclick="loadPreset(${JSON.stringify(name)})">${name}
+      <span class="x" onclick="event.stopPropagation();deletePreset(${JSON.stringify(name)})">✕</span>
+    </span>`).join('');
+  // Presets in closure speichern
+  window.__presets=presets;
+}
+function loadPreset(name){
+  const p=window.__presets?.[name];if(!p)return;
+  const set=(id,val)=>{const e=document.getElementById(id);if(e)e.value=val||'';};
+  set('emb-title',p.title);set('emb-desc',p.description);set('emb-img',p.imageUrl);
+  set('emb-thumb',p.thumbnailUrl);set('emb-footer',p.footer);set('emb-content',p.content);
+  const col=document.getElementById('emb-color');if(col)col.value=p.color||'#5865f2';
+  const ts=document.getElementById('emb-ts');if(ts)ts.checked=p.timestamp!==false;
+  updatePreview();
+}
+async function savePreset(){
+  const name=(document.getElementById('preset-name')?.value||'').trim();
+  if(!name){alert('Preset-Name eingeben.');return;}
+  const preset={
+    title:document.getElementById('emb-title').value,
+    description:document.getElementById('emb-desc').value,
+    color:document.getElementById('emb-color').value,
+    imageUrl:document.getElementById('emb-img').value,
+    thumbnailUrl:document.getElementById('emb-thumb').value,
+    footer:document.getElementById('emb-footer').value,
+    content:document.getElementById('emb-content').value,
+    timestamp:document.getElementById('emb-ts')?.checked!==false,
+  };
+  await api('/api/presets',{method:'POST',body:JSON.stringify({name,preset})});
+  document.getElementById('preset-name').value='';
+  loadPresets();
+}
+async function deletePreset(name){
+  await api(`/api/presets/${encodeURIComponent(name)}`,{method:'DELETE'});
+  loadPresets();
 }
 function updatePreview(){
   const v=id=>document.getElementById(id)?.value||'';
@@ -411,7 +501,8 @@ function updatePreview(){
 async function sendEmbed(){
   const channelId=document.getElementById('emb-channel')?.value;
   if(!channelId)return alert('Keinen Channel ausgewählt.');
-  const body={channelId,
+  const messageId=(document.getElementById('emb-msgid')?.value||'').trim();
+  const body={channelId,messageId:messageId||undefined,
     title:document.getElementById('emb-title').value,
     description:document.getElementById('emb-desc').value,
     color:document.getElementById('emb-color').value,
@@ -421,7 +512,7 @@ async function sendEmbed(){
     content:document.getElementById('emb-content').value,
     timestamp:document.getElementById('emb-ts')?.checked!==false};
   const r=await api('/api/embed',{method:'POST',body:JSON.stringify(body)});
-  if(r.ok)flash('emb-msg','✅ Gesendet!');else alert('Fehler: '+r.error);
+  if(r.ok)flash('emb-msg',messageId?'✅ Nachricht bearbeitet!':'✅ Gesendet!');else alert('Fehler: '+(r.error||'Unbekannter Fehler'));
 }
 
 // ── Tickets ─────────────────────────────────────────────────────────
