@@ -9,6 +9,7 @@ const FILES = {
   automod: path.join(DATA_DIR, 'automod.json'),
   tickets: path.join(DATA_DIR, 'tickets.json'),
   social: path.join(DATA_DIR, 'social.json'),
+  counting: path.join(DATA_DIR, 'counting.json'),
 };
 
 function readJSON(file) {
@@ -44,3 +45,8 @@ module.exports = {
     writeJSON(FILES[store], cache[store]);
   },
 };
+
+// Presets separat (nicht mit anderen Stores vermischt)
+const PRESETS_FILE = path.join(DATA_DIR, 'presets.json');
+cache['presets'] = readJSON(PRESETS_FILE);
+FILES['presets'] = PRESETS_FILE;
