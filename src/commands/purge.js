@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, ApplicationCommandType, ContextMenuCommandBuilder } = require('discord.js');
+const { logMod } = require('../utils/modlog');
 const db = require('../utils/database');
 
 async function doPurge(channel, limit, afterMessageId, requestedBy) {
@@ -53,5 +54,6 @@ module.exports = {
     const deleted = await interaction.channel.bulkDelete(toDelete, true).catch(() => null);
     const count = deleted?.size ?? toDelete.length;
     await interaction.editReply({ content: `🗑️ ${count} Nachricht${count !== 1 ? 'en' : ''} gelöscht.` });
+    await logMod(interaction.client, interaction.guild.id, { action:'purge', moderator:interaction.user, extra:{ Channel: interaction.channel.name, Nachrichten: count } });
   },
 };

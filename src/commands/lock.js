@@ -1,3 +1,4 @@
+const { logMod } = require('../utils/modlog');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 module.exports = {
@@ -25,6 +26,7 @@ module.exports = {
       .setDescription(grund ? `Grund: ${grund}` : 'Dieser Channel wurde gesperrt.');
 
     await interaction.reply({ embeds: [embed] });
+    await logMod(interaction.client, interaction.guild.id, { action:'lock', moderator:interaction.user, reason:grund, extra:{ Channel: interaction.channel.name } });
     // Lock-Nachricht bleibt stehen (wird erst bei /unlock gelöscht)
   },
 };

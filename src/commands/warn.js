@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const db = require('../utils/database');
+const { logMod } = require('../utils/modlog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -38,6 +39,7 @@ module.exports = {
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed], ephemeral: true });
+    await logMod(interaction.client, interaction.guild.id, { action:'warn', target, moderator:interaction.user, reason, extra:{ 'Verwarnungen gesamt': count } });
 
     target.send({ content: `Du wurdest in **${interaction.guild.name}** verwarnt.\nGrund: ${reason}` }).catch(() => {});
   },

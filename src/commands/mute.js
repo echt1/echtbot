@@ -1,3 +1,4 @@
+const { logMod } = require('../utils/modlog');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 // Erlaubte Zeiteinheiten -> Millisekunden
@@ -51,6 +52,7 @@ module.exports = {
         .setTimestamp();
 
       await interaction.reply({ embeds: [embed], ephemeral: true });
+      await logMod(interaction.client, interaction.guild.id, { action:'mute', target, moderator:interaction.user, reason, extra:{ Dauer: durationInput } });
     } catch (err) {
       console.error(err);
       await interaction.reply({ content: '❌ Beim Muten ist ein Fehler aufgetreten.', ephemeral: true });

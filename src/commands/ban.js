@@ -1,3 +1,4 @@
+const { logMod } = require('../utils/modlog');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 module.exports = {
@@ -40,6 +41,7 @@ module.exports = {
         .setTimestamp();
 
       await interaction.reply({ embeds: [embed], ephemeral: true });
+      await logMod(interaction.client, interaction.guild.id, { action:'ban', target, moderator:interaction.user, reason });
     } catch (err) {
       console.error(err);
       await interaction.reply({ content: '❌ Beim Bannen ist ein Fehler aufgetreten.', ephemeral: true });

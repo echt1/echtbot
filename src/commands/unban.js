@@ -1,3 +1,4 @@
+const { logMod } = require('../utils/modlog');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 module.exports = {
@@ -34,6 +35,7 @@ module.exports = {
         ).setTimestamp();
 
       await interaction.reply({ embeds: [embed], ephemeral: true });
+      await logMod(interaction.client, interaction.guild.id, { action:'unban', target:banned.user, moderator:interaction.user, reason:grund });
     } catch (err) {
       console.error(err);
       await interaction.reply({ content: '❌ Fehler beim Entbannen.', ephemeral: true });
