@@ -297,25 +297,62 @@ async function loadSettings(){
   try{
     await loadGuildData(gid);
     const data=await api(`/api/settings/${gid}`).catch(()=>({}));
-    const joinRoleId=data.joinRoleId||'';
+    const joinRoles=data.joinRoles||[];
+    const counting=data.counting||{channelId:'',resetOnFail:true};
+    const joinRoleTags=joinRoles.map(id=>{
+      const r=(roleCache[gid]||[]).find(r=>r.id===id);
+      return r?`<span class="tag">${r.name}<span class="x" data-gid="${gid}" data-rid="${id}" onclick="removeJoinRole(this)">✕</span></span>`:'';
+    }).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Rollen</span>';
     document.getElementById('settings-content').innerHTML=`
-      <div class="section"><h2>Join-Rolle</h2>
-        <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Diese Rolle wird automatisch an neue Member vergeben, sobald sie dem Server beitreten.</p>
+      <div class="section"><h2>Join-Rollen</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Diese Rollen werden automatisch an neue Member vergeben.</p>
+        <div class="tag-cloud" id="joinrole-cloud" style="margin-bottom:10px">${joinRoleTags}</div>
         <div class="row">
-          <select id="join-role">
-            <option value="">– Keine Join-Rolle –</option>
-            ${roleOptions(gid,joinRoleId)}
-          </select>
-          <button class="btn btn-primary btn-sm" onclick="saveJoinRole('${gid}')">Speichern</button>
+          <select id="join-role-sel"><option value="">Rolle wählen...</option>${roleOptions(gid,'')}</select>
+          <button class="btn btn-primary btn-sm" onclick="addJoinRole('${gid}')">+ Hinzufügen</button>
           <span class="success" id="joinrole-msg"></span>
+        </div>
+      </div>
+      <div class="section"><h2>Counting Channel</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">User zählen in diesem Channel nacheinander. Falsche Zahlen oder doppelte Counts werden gelöscht.</p>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="row"><label>Channel</label>
+            <select id="count-channel">
+              <option value="">– Deaktiviert –</option>
+              ${chOptions(gid,counting.channelId)}
+            </select>
+          </div>
+          <div class="row"><label>Bei Fehler zurücksetzen</label>
+            <label class="toggle"><input type="checkbox" id="count-reset" ${counting.resetOnFail?'checked':''}><span class="slider"></span></label>
+          </div>
+          <div><button class="btn btn-primary btn-sm" onclick="saveCounting('${gid}')">Speichern</button>
+          <span class="success" id="counting-msg" style="margin-left:10px"></span></div>
         </div>
       </div>`;
   }catch(e){document.getElementById('settings-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
 }
-async function saveJoinRole(gid){
-  const roleId=document.getElementById('join-role').value;
-  await api(`/api/settings/${gid}/joinrole`,{method:'POST',body:JSON.stringify({roleId:roleId||null})});
-  flash('joinrole-msg','✅ Gespeichert.');
+async function addJoinRole(gid){
+  const rid=document.getElementById('join-role-sel')?.value;if(!rid)return;
+  const data=await api(`/api/settings/${gid}`).catch(()=>({}));
+  const roles=[...(data.joinRoles||[])];
+  if(!roles.includes(rid))roles.push(rid);
+  await api(`/api/settings/${gid}/joinroles`,{method:'POST',body:JSON.stringify({roles})});
+  flash('joinrole-msg','✅ Gespeichert.');loadSettings();
+}
+function removeJoinRole(btn){
+  const gid=btn.dataset.gid,rid=btn.dataset.rid;
+  api(`/api/settings/${gid}`).then(data=>{
+    const roles=(data.joinRoles||[]).filter(id=>id!==rid);
+    api(`/api/settings/${gid}/joinroles`,{method:'POST',body:JSON.stringify({roles})}).then(()=>{
+      flash('joinrole-msg','✅ Gespeichert.');loadSettings();
+    });
+  });
+}
+async function saveCounting(gid){
+  const channelId=document.getElementById('count-channel').value;
+  const resetOnFail=document.getElementById('count-reset').checked;
+  await api(`/api/settings/${gid}/counting`,{method:'POST',body:JSON.stringify({channelId:channelId||null,resetOnFail})});
+  flash('counting-msg','✅ Gespeichert.');
 }
 function logout(){
   if(!confirm('Wirklich abmelden?'))return;
@@ -386,9 +423,9 @@ async function loadAutomod(){
           </div>
           <div>
             <div style="font-size:.88rem;color:var(--muted);margin-bottom:6px">Ausgeschlossene Rollen (kein Automod)</div>
-            <div class="tag-cloud" id="excl-role-cloud">${(cfg.excludedRoles||[]).map(id=>{const r=(roleCache['${gid}']||[]).find(r=>r.id===id);return r?`<span class="tag">${r.name}<span class="x" data-gid="${gid}" data-rid="${id}" onclick="removeExclRole(this)">✕</span></span>`:''}).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Ausnahmen</span>'}</div>
+            <div class="tag-cloud" id="excl-role-cloud">${(cfg.excludedRoles||[]).map(id=>{const r=(roleCache[gid]||[]).find(r=>r.id===id);return r?`<span class="tag">${r.name}<span class="x" data-gid="${gid}" data-rid="${id}" onclick="removeExclRole(this)">✕</span></span>`:''}).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Ausnahmen</span>'}</div>
             <div class="row" style="margin-top:8px">
-              <select id="excl-role-sel"><option value="">Rolle auswählen...</option>${roleOptions(gid,'')}</select>
+              <select id="excl-role-sel"><option value="">Rolle wählen...</option>${roleOptions(gid,'')}</select>
               <button class="btn btn-ghost btn-sm" onclick="addExclRole('${gid}')">+ Hinzufügen</button>
             </div>
           </div>
