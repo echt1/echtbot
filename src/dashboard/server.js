@@ -242,20 +242,34 @@ function startDashboard(client) {
   // ── Einstellungen (JoinRole etc.) ─────────────────────────────────────
   app.get('/api/settings/:gid', auth, (req, res) => {
     const cfg = db.get('automod');
+    const counting = db.get('counting') || {};
     const gid = req.params.gid;
     res.json({
-      joinRoleId: cfg[gid]?.joinRoleId || null,
-      excludedRoles: cfg[gid]?.excludedRoles || [],
+      joinRoles: cfg[gid]?.joinRoles || (cfg[gid]?.joinRoleId ? [cfg[gid].joinRoleId] : []),
+      counting: counting[gid] || { channelId: null, resetOnFail: true },
     });
   });
 
-  app.post('/api/settings/:gid/joinrole', auth, (req, res) => {
-    const { roleId } = req.body;
+  app.post('/api/settings/:gid/joinroles', auth, (req, res) => {
+    const { roles } = req.body;
     const cfg = db.get('automod');
-    cfg[req.params.gid] = cfg[req.params.gid] || {};
-    if (roleId) cfg[req.params.gid].joinRoleId = roleId;
-    else delete cfg[req.params.gid].joinRoleId;
+    const gid = req.params.gid;
+    cfg[gid] = cfg[gid] || {};
+    cfg[gid].joinRoles = Array.isArray(roles) ? roles : [];
     db.set('automod', cfg);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/settings/:gid/counting', auth, (req, res) => {
+    const { channelId, resetOnFail } = req.body;
+    const counting = db.get('counting') || {};
+    const gid = req.params.gid;
+    if (channelId) {
+      counting[gid] = { channelId, resetOnFail: resetOnFail !== false, count: counting[gid]?.count || 0, lastUserId: null };
+    } else {
+      delete counting[gid];
+    }
+    db.set('counting', counting);
     res.json({ ok: true });
   });
 
