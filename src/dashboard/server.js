@@ -189,6 +189,46 @@ function startDashboard(client) {
     res.json({ ok: true });
   });
 
+  app.post('/api/settings/:gid/modlog', auth, (req, res) => {
+    const { channelId } = req.body;
+    const cfg = db.get('automod');
+    const gid = req.params.gid;
+    cfg[gid] = cfg[gid] || {};
+    if (channelId) cfg[gid].modlogChannelId = channelId;
+    else delete cfg[gid].modlogChannelId;
+    db.set('automod', cfg);
+    res.json({ ok: true });
+  });
+
+  // ── Ticket Logs ────────────────────────────────────────────────────────
+  app.get('/api/ticketlogs/:gid', auth, async (req, res) => {
+    const ticketLogs = db.get('ticketlogs') || {};
+    const logs = ticketLogs[req.params.gid] || [];
+    // User-Namen auflösen für Übersicht
+    const userIds = [...new Set(logs.flatMap(l => [l.userId, l.closedBy, l.claimedBy].filter(Boolean)))];
+    const names = {};
+    await Promise.all(userIds.map(async id => {
+      const u = await client.users.fetch(id).catch(() => null);
+      names[id] = u ? (u.globalName || u.username) : id;
+    }));
+    res.json({ logs, names });
+  });
+
+  app.get('/api/ticketlogs/:gid/:ticketId', auth, (req, res) => {
+    const ticketLogs = db.get('ticketlogs') || {};
+    const logs = ticketLogs[req.params.gid] || [];
+    const log = logs.find(l => l.id === req.params.ticketId);
+    if (!log) return res.status(404).json({ error: 'Nicht gefunden' });
+    res.json(log);
+  });
+
+  app.delete('/api/ticketlogs/:gid/:ticketId', auth, (req, res) => {
+    const ticketLogs = db.get('ticketlogs') || {};
+    ticketLogs[req.params.gid] = (ticketLogs[req.params.gid] || []).filter(l => l.id !== req.params.ticketId);
+    db.set('ticketlogs', ticketLogs);
+    res.json({ ok: true });
+  });
+
   // ── Embed Presets ─────────────────────────────────────────────────────
   app.get('/api/presets', auth, (req, res) => {
     const data = db.get('automod');
@@ -247,6 +287,7 @@ function startDashboard(client) {
     res.json({
       joinRoles: cfg[gid]?.joinRoles || (cfg[gid]?.joinRoleId ? [cfg[gid].joinRoleId] : []),
       counting: counting[gid] || { channelId: null, resetOnFail: true },
+      modlogChannelId: cfg[gid]?.modlogChannelId || null,
     });
   });
 
