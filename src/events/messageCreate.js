@@ -38,14 +38,14 @@ module.exports = {
   name: 'messageCreate',
   async execute(message) {
     if (message.author.bot || !message.guild) return;
-    // Moderatoren und ausgeschlossene Rollen von Automod ausnehmen
     if (message.member?.permissions.has('ManageGuild')) return;
-    const excludedRoles = config.excludedRoles || [];
-    if (excludedRoles.length && message.member?.roles.cache.some(r => excludedRoles.includes(r.id))) return;
 
     const automod = db.get('automod');
     const config = automod[message.guild.id];
     if (!config || !config.enabled) return;
+
+    const excludedRoles = config.excludedRoles || [];
+    if (excludedRoles.length && message.member?.roles.cache.some(r => excludedRoles.includes(r.id))) return;
 
     // Bad Words
     if (config.bannedWords?.length) {
