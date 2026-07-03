@@ -62,6 +62,30 @@ module.exports = {
   name: 'interactionCreate',
   async execute(interaction) {
 
+    // ── Giveaway: Mitmachen Button ────────────────────────────────────
+    if (interaction.isButton() && interaction.customId === 'giveaway_enter') {
+      const giveaways = db.get('giveaways');
+      const gid = interaction.guild.id;
+      const gw = giveaways[gid]?.find(g => g.messageId === interaction.message.id && !g.ended);
+      if (!gw) return interaction.reply({ content: '❌ Dieses Giveaway ist bereits beendet.', ephemeral: true });
+
+      // Rollencheck
+      if (gw.requiredRoleId && !interaction.member.roles.cache.has(gw.requiredRoleId)) {
+        return interaction.reply({ content: `❌ Du brauchst die Rolle <@&${gw.requiredRoleId}> um teilzunehmen.`, ephemeral: true });
+      }
+
+      if (gw.entries.includes(interaction.user.id)) {
+        // Austragen
+        gw.entries = gw.entries.filter(id => id !== interaction.user.id);
+        db.set('giveaways', giveaways);
+        return interaction.reply({ content: '✅ Du hast das Giveaway verlassen.', ephemeral: true });
+      }
+
+      gw.entries.push(interaction.user.id);
+      db.set('giveaways', giveaways);
+      return interaction.reply({ content: `🎉 Du nimmst jetzt teil! (${gw.entries.length} Teilnehmer)`, ephemeral: true });
+    }
+
     // ── Slash + Context Menu Commands ──────────────────────────────
     if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand() || interaction.isUserContextMenuCommand()) {
       const command = interaction.client.commands.get(interaction.commandName);
@@ -174,6 +198,35 @@ module.exports = {
         return interaction.reply({ content: '❌ Dies ist kein Ticket-Channel.', ephemeral: true });
       }
       await interaction.reply({ content: '🔒 Ticket wird in 5 Sekunden geschlossen...' });
+
+      // Transcript speichern
+      try {
+        const msgs = await interaction.channel.messages.fetch({ limit: 200 });
+        const transcript = [...msgs.values()].reverse().map(m => ({
+          author: m.author.tag, authorId: m.author.id,
+          content: m.content || (m.embeds[0]?.title ? `[Embed: ${m.embeds[0].title}]` : '[Kein Text]'),
+          timestamp: m.createdTimestamp,
+        }));
+        const ticketLogs = db.get('ticketlogs') || {};
+        ticketLogs[interaction.guild.id] = ticketLogs[interaction.guild.id] || [];
+        ticketLogs[interaction.guild.id].push({
+          id: interaction.channel.id,
+          userId: guildData.tickets[interaction.channel.id]?.userId,
+          category: guildData.tickets[interaction.channel.id]?.category,
+          claimedBy: guildData.tickets[interaction.channel.id]?.claimedBy,
+          openedAt: guildData.tickets[interaction.channel.id]?.openedAt,
+          closedAt: Date.now(),
+          closedBy: interaction.user.id,
+          transcript,
+        });
+        // Älter als 30 Tage entfernen
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        ticketLogs[interaction.guild.id] = ticketLogs[interaction.guild.id].filter(t => t.closedAt > cutoff);
+        db.set('ticketlogs', ticketLogs);
+      } catch (err) {
+        console.error('[TicketLog] Fehler beim Speichern:', err.message);
+      }
+
       delete guildData.tickets[interaction.channel.id];
       db.set('tickets', guildConfig);
       setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);

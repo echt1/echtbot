@@ -31,19 +31,16 @@ module.exports = {
 
     // Falsche Zahl?
     if (num !== expected) {
-      await message.delete().catch(() => {});
       const oldCount = cfg.count || 0;
       if (cfg.resetOnFail) {
         cfg.count = 0;
         cfg.lastUserId = null;
         db.set('counting', counting);
-        const warn = await message.channel.send({
-          content: `❌ ${message.author} hat **${num}** geschrieben, richtig wäre **${expected}** gewesen. Counting wurde auf 0 zurückgesetzt.`,
+        await message.channel.send({
+          content: `❌ ${message.author} hat **${num}** geschrieben, richtig wäre **${oldCount + 1}** gewesen. Fangen wir wieder bei 1 an.`,
         });
-        setTimeout(() => warn.delete().catch(() => {}), 8000);
       } else {
-        const warn = await message.channel.send({ content: `❌ ${message.author} – Falsche Zahl! Erwartet: **${expected}**` });
-        setTimeout(() => warn.delete().catch(() => {}), 5000);
+        await message.channel.send({ content: `❌ ${message.author} – Falsche Zahl! Erwartet: **${expected}**` });
       }
       return;
     }

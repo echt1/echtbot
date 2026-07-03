@@ -1,5 +1,6 @@
 const { ActivityType } = require('discord.js');
 const { startSocialChecker } = require('../utils/socialChecker');
+const { startGiveawayChecker } = require('../utils/giveawayManager');
 const db = require('../utils/database');
 
 const TYPES = {
@@ -33,5 +34,6 @@ module.exports = {
     }
 
     startSocialChecker(client);
+    startGiveawayChecker(client);
   },
 };
