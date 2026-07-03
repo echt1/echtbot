@@ -165,7 +165,7 @@ async function runCheck(client) {
 
         if (result.kind === 'youtube') {
           embed.setAuthor({
-            name: ${result.name} hat hochgeladen!,
+            name: `${result.name} hat hochgeladen!`,
             iconURL: result.channelIcon || undefined,
           });
           embed.setImage(result.thumbnail);
@@ -173,11 +173,11 @@ async function runCheck(client) {
           embed.setFooter({ text: 'Upload', iconURL: 'https://look.jmgbb.com/images/NyiKLMt5Mw.png' });
           embed.setTimestamp(result.publishedAt ? new Date(result.publishedAt) : new Date());
         } else if (result.kind === 'twitch') {
-          embed.setAuthor({ name: ${result.name} ist jetzt live! });
+          embed.setAuthor({ name: `${result.name} ist jetzt live!` });
           embed.setImage(result.thumbnail);
           embed.setTimestamp();
         } else {
-          embed.setAuthor({ name: Neues ${result.kind} Video });
+          embed.setAuthor({ name: `Neues ${result.kind} Video` });
           embed.setTimestamp();
         }
 
