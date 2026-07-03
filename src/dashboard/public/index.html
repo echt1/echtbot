@@ -98,6 +98,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <div class="nav-item" onclick="nav('tickets',this)">🎫 Tickets</div>
     <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
     <div class="nav-item" onclick="nav('warnings',this)">⚠️ Verwarnungen</div>
+    <div class="nav-item" onclick="nav('ticketlog',this)">📋 Ticket-Log</div>
     <div class="nav-item" onclick="nav('settings',this)">⚙️ Einstellungen</div>
     <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border)">
       <div class="nav-item" onclick="logout()" style="color:var(--red)">⏻ Abmelden</div>
@@ -211,6 +212,18 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
       <div id="warnings-content"><div class="empty">Laden...</div></div>
     </div>
 
+    <!-- Ticket-Log -->
+    <div id="page-ticketlog" class="page">
+      <h1 class="ptitle">Ticket-Log</h1>
+      <div class="section" style="margin-bottom:16px">
+        <div class="row" style="gap:10px">
+          <input type="text" id="tl-search" placeholder="Suche nach User, Kategorie..." style="flex:1;max-width:320px" oninput="filterTicketLogs()">
+          <span id="tl-count" style="color:var(--muted);font-size:.85rem;line-height:36px"></span>
+        </div>
+      </div>
+      <div id="ticketlog-content"><div class="empty">Laden...</div></div>
+    </div>
+
     <!-- Einstellungen -->
     <div id="page-settings" class="page">
       <h1 class="ptitle">Einstellungen</h1>
@@ -255,7 +268,7 @@ function nav(page,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if(el)el.classList.add('active');
-  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,settings:loadSettings};
+  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,settings:loadSettings};
   if(loaders[page])loaders[page]();
 }
 
@@ -272,6 +285,65 @@ function chName(gid,id){const c=(chCache[gid]||[]).find(c=>c.id===id);return c?`
 function chOptions(gid,sel=''){return(chCache[gid]||[]).map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>#${c.name}</option>`).join('');}
 function roleOptions(gid,sel=''){return(roleCache[gid]||[]).map(r=>`<option value="${r.id}"${r.id===sel?' selected':''}>${r.name}</option>`).join('');}
 function fmt(s){const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
+// ── Ticket-Log ───────────────────────────────────────────────────────
+let _tlData = null;
+async function loadTicketLog(){
+  const gid=firstGuild();if(!gid)return;
+  try{
+    const r=await api(`/api/ticketlogs/${gid}`);
+    _tlData=r;
+    renderTicketLogs(r.logs, r.names);
+  }catch(e){document.getElementById('ticketlog-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
+}
+function renderTicketLogs(logs, names){
+  const el=document.getElementById('ticketlog-content');
+  document.getElementById('tl-count').textContent=`${logs.length} Einträge`;
+  if(!logs.length){el.innerHTML='<div class="empty">Keine Ticket-Logs vorhanden.</div>';return;}
+  const rows=[...logs].reverse().map(t=>{
+    const user=names[t.userId]||t.userId||'–';
+    const closed=names[t.closedBy]||t.closedBy||'–';
+    const claimed=t.claimedBy?(names[t.claimedBy]||t.claimedBy):'–';
+    const date=t.closedAt?new Date(t.closedAt).toLocaleString('de-DE'):'–';
+    const msgs=t.transcript?.length||0;
+    return `<tr>
+      <td style="color:var(--muted);font-size:.82rem;white-space:nowrap">${date}</td>
+      <td>${t.category||'Allgemein'}</td>
+      <td>${user}</td>
+      <td style="color:var(--muted)">${claimed}</td>
+      <td style="color:var(--muted)">${msgs}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-tid="${t.id}" onclick="toggleTranscript(this)">👁</button>
+        <button class="btn btn-danger btn-sm" data-gid="${gid}" data-tid="${t.id}" onclick="deleteTicketLog(this)">✕</button>
+      </div></td></tr>
+    <tr id="tr-${t.id}" style="display:none"><td colspan="6">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:300px;overflow-y:auto;font-size:.82rem;font-family:monospace">
+        ${(t.transcript||[]).map(m=>`<div style="margin-bottom:4px"><span style="color:var(--accent)">${m.author}</span> <span style="color:var(--muted)">${new Date(m.timestamp).toLocaleTimeString('de-DE')}</span><br>${m.content.replace(/</g,'&lt;')}</div>`).join('')||'(leer)'}
+      </div>
+    </td></tr>`;
+  }).join('');
+  el.innerHTML=`<div class="section" style="padding:0;overflow:hidden"><table>
+    <tr><th>Datum</th><th>Kategorie</th><th>User</th><th>Claimed by</th><th>Nachrichten</th><th></th></tr>
+    ${rows}</table></div>`;
+}
+function toggleTranscript(btn){
+  const row=document.getElementById('tr-'+btn.dataset.tid);
+  if(row)row.style.display=row.style.display==='none'?'table-row':'none';
+}
+async function deleteTicketLog(btn){
+  if(!confirm('Log löschen?'))return;
+  await api(`/api/ticketlogs/${btn.dataset.gid}/${btn.dataset.tid}`,{method:'DELETE'});
+  loadTicketLog();
+}
+function filterTicketLogs(){
+  if(!_tlData)return;
+  const q=document.getElementById('tl-search').value.toLowerCase();
+  const filtered=_tlData.logs.filter(t=>{
+    const user=(_tlData.names[t.userId]||t.userId||'').toLowerCase();
+    const cat=(t.category||'').toLowerCase();
+    return user.includes(q)||cat.includes(q)||t.id.includes(q);
+  });
+  renderTicketLogs(filtered,_tlData.names);
+}
 // ── Automod excluded roles helpers ─────────────────────────────────
 async function addExclRole(gid){
   const sel=document.getElementById('excl-role-sel');
@@ -328,6 +400,14 @@ async function loadSettings(){
           <div><button class="btn btn-primary btn-sm" onclick="saveCounting('${gid}')">Speichern</button>
           <span class="success" id="counting-msg" style="margin-left:10px"></span></div>
         </div>
+      </div>
+      <div class="section"><h2>Mod-Log Channel</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Alle Moderations-Aktionen werden in diesen Channel geloggt.</p>
+        <div class="row">
+          <select id="modlog-channel"><option value="">– Deaktiviert –</option>${chOptions(gid,data.modlogChannelId||'')}</select>
+          <button class="btn btn-primary btn-sm" onclick="saveModlog('${gid}')">Speichern</button>
+          <span class="success" id="modlog-msg"></span>
+        </div>
       </div>`;
   }catch(e){document.getElementById('settings-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
 }
@@ -353,6 +433,11 @@ async function saveCounting(gid){
   const resetOnFail=document.getElementById('count-reset').checked;
   await api(`/api/settings/${gid}/counting`,{method:'POST',body:JSON.stringify({channelId:channelId||null,resetOnFail})});
   flash('counting-msg','✅ Gespeichert.');
+}
+async function saveModlog(gid){
+  const channelId=document.getElementById('modlog-channel').value;
+  await api(`/api/settings/${gid}/modlog`,{method:'POST',body:JSON.stringify({channelId:channelId||null})});
+  flash('modlog-msg','✅ Gespeichert.');
 }
 function logout(){
   if(!confirm('Wirklich abmelden?'))return;
