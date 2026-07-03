@@ -10,6 +10,8 @@ const FILES = {
   tickets: path.join(DATA_DIR, 'tickets.json'),
   social: path.join(DATA_DIR, 'social.json'),
   counting: path.join(DATA_DIR, 'counting.json'),
+  ticketlogs: path.join(DATA_DIR, 'ticketlogs.json'),
+  giveaways: path.join(DATA_DIR, 'giveaways.json'),
 };
 
 function readJSON(file) {
