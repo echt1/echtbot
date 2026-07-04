@@ -13,6 +13,7 @@ const FILES = {
   ticketlogs: path.join(DATA_DIR, 'ticketlogs.json'),
   giveaways: path.join(DATA_DIR, 'giveaways.json'),
   j2c: path.join(DATA_DIR, 'j2c.json'),
+  customcommands: path.join(DATA_DIR, 'customcommands.json'),
 };
 
 function readJSON(file) {
