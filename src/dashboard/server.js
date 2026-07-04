@@ -202,16 +202,17 @@ function startDashboard(client) {
 
   // ── Ticket Logs ────────────────────────────────────────────────────────
   app.get('/api/ticketlogs/:gid', auth, async (req, res) => {
-    const ticketLogs = db.get('ticketlogs') || {};
-    const logs = ticketLogs[req.params.gid] || [];
-    // User-Namen auflösen für Übersicht
-    const userIds = [...new Set(logs.flatMap(l => [l.userId, l.closedBy, l.claimedBy].filter(Boolean)))];
-    const names = {};
-    await Promise.all(userIds.map(async id => {
-      const u = await client.users.fetch(id).catch(() => null);
-      names[id] = u ? (u.globalName || u.username) : id;
-    }));
-    res.json({ logs, names });
+    try {
+      const ticketLogs = db.get('ticketlogs') || {};
+      const logs = ticketLogs[req.params.gid] || [];
+      const userIds = [...new Set(logs.flatMap(l => [l.userId, l.closedBy, l.claimedBy].filter(Boolean)))];
+      const names = {};
+      await Promise.all(userIds.map(async id => {
+        const u = await client.users.fetch(id).catch(() => null);
+        names[id] = u ? (u.globalName || u.username) : id;
+      }));
+      res.json({ logs, names });
+    } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
   app.get('/api/ticketlogs/:gid/:ticketId', auth, (req, res) => {
@@ -252,6 +253,29 @@ function startDashboard(client) {
       db.set('automod', data);
     }
     res.json({ ok: true });
+  });
+
+  // ── Embed Fetch ──────────────────────────────────────────────────────
+  app.get('/api/embed/fetch', auth, async (req, res) => {
+    const { channelId, messageId } = req.query;
+    if (!channelId || !messageId) return res.status(400).json({ error: 'channelId und messageId benötigt' });
+    try {
+      const ch = await client.channels.fetch(channelId).catch(() => null);
+      if (!ch) return res.status(404).json({ error: 'Channel nicht gefunden' });
+      const msg = await ch.messages.fetch(messageId).catch(() => null);
+      if (!msg) return res.status(404).json({ error: 'Nachricht nicht gefunden' });
+      const embed = msg.embeds[0];
+      res.json({
+        content: msg.content || '',
+        title: embed?.title || '',
+        description: embed?.description || '',
+        color: embed?.color ? '#' + embed.color.toString(16).padStart(6,'0') : '#5865f2',
+        imageUrl: embed?.image?.url || '',
+        thumbnailUrl: embed?.thumbnail?.url || '',
+        footer: embed?.footer?.text || '',
+        timestamp: !!embed?.timestamp,
+      });
+    } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
   // ── Embed ──────────────────────────────────────────────────────────
@@ -324,6 +348,21 @@ function startDashboard(client) {
       result[id] = u ? (u.globalName || u.username || id) : id;
     }));
     res.json(result);
+  });
+
+  // ── J2C Settings ─────────────────────────────────────────────────────
+  app.get('/api/j2c/:gid', auth, (req, res) => {
+    const j2c = db.get('j2c');
+    res.json(j2c[req.params.gid] || {});
+  });
+
+  app.post('/api/j2c/:gid', auth, (req, res) => {
+    const j2c = db.get('j2c');
+    const gid = req.params.gid;
+    j2c[gid] = { ...(j2c[gid] || {}), ...req.body };
+    if (!j2c[gid].activeChannels) j2c[gid].activeChannels = {};
+    db.set('j2c', j2c);
+    res.json({ ok: true });
   });
 
   app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
