@@ -96,9 +96,10 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <div class="nav-item" onclick="nav('automod',this)">🛡️ Automod</div>
     <div class="nav-item" onclick="nav('embed',this)">📝 Embed Builder</div>
     <div class="nav-item" onclick="nav('tickets',this)">🎫 Tickets</div>
+    <div class="nav-item" onclick="nav('ticketlog',this)">📋 Ticket-Log</div>
     <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
     <div class="nav-item" onclick="nav('warnings',this)">⚠️ Verwarnungen</div>
-    <div class="nav-item" onclick="nav('ticketlog',this)">📋 Ticket-Log</div>
+    <div class="nav-item" onclick="nav('j2c',this)">🔊 Join2Create</div>
     <div class="nav-item" onclick="nav('settings',this)">⚙️ Einstellungen</div>
     <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border)">
       <div class="nav-item" onclick="logout()" style="color:var(--red)">⏻ Abmelden</div>
@@ -150,7 +151,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
       <div class="section">
         <div class="row" style="margin-bottom:16px;flex-wrap:wrap;gap:10px">
           <div class="row"><label>Channel:</label><select id="emb-channel"></select></div>
-          <div class="row"><label style="white-space:nowrap">Message-ID <span style="color:var(--muted);font-size:.78rem">(leer = neu senden)</span></label><input type="text" id="emb-msgid" placeholder="Optional – zum Bearbeiten" style="width:220px"></div>
+          <div class="row"><label style="white-space:nowrap">Message-ID <span style="color:var(--muted);font-size:.78rem">(leer = neu senden)</span></label><input type="text" id="emb-msgid" placeholder="Optional – zum Bearbeiten" style="width:220px" onblur="prefillFromMessage()"></div>
         </div>
         <div style="margin-bottom:14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -224,6 +225,12 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
       <div id="ticketlog-content"><div class="empty">Laden...</div></div>
     </div>
 
+    <!-- J2C -->
+    <div id="page-j2c" class="page">
+      <h1 class="ptitle">Join2Create Voice Channels</h1>
+      <div id="j2c-content"><div class="empty">Laden...</div></div>
+    </div>
+
     <!-- Einstellungen -->
     <div id="page-settings" class="page">
       <h1 class="ptitle">Einstellungen</h1>
@@ -268,7 +275,7 @@ function nav(page,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if(el)el.classList.add('active');
-  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,settings:loadSettings};
+  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,j2c:loadJ2C,settings:loadSettings};
   if(loaders[page])loaders[page]();
 }
 
@@ -343,6 +350,66 @@ function filterTicketLogs(){
     return user.includes(q)||cat.includes(q)||t.id.includes(q);
   });
   renderTicketLogs(filtered,_tlData.names);
+}
+// ── J2C ─────────────────────────────────────────────────────────────
+async function loadJ2C(){
+  const gid=firstGuild();if(!gid)return;
+  try{
+    await loadGuildData(gid);
+    const cfg=await api(`/api/j2c/${gid}`).catch(()=>({}));
+    const vcChannels=(chCache[gid]||[]).filter(c=>true); // text channels for panel
+    // Voice channels brauchen wir extra - holen wir aus guilds API
+    const voiceChRes=await api(`/api/guilds/${gid}/channels`).catch(()=>[]);
+    // Server hat nur Text zurück - für VCs eigene Route nötig, nutzen wir was wir haben
+    document.getElementById('j2c-content').innerHTML=`
+      <div class="section"><h2>Konfiguration</h2>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="row"><label>Trigger-Channel ID</label>
+            <input type="text" id="j2c-trigger" placeholder="Voice Channel ID (Rechtsklick → ID kopieren)" value="${cfg.triggerChannelId||''}" style="width:260px">
+          </div>
+          <div class="row"><label>Kategorie ID</label>
+            <input type="text" id="j2c-category" placeholder="Kategorie ID (optional, sonst gleiche wie Trigger)" value="${cfg.categoryId||''}" style="width:260px">
+          </div>
+          <div class="row"><label>Name-Template</label>
+            <input type="text" id="j2c-template" placeholder="{user}s Channel" value="${cfg.nameTemplate||''}" style="width:260px">
+            <span style="color:var(--muted);font-size:.78rem">{user} = Name, {game} = Spiel</span>
+          </div>
+          <div class="row"><label>User-Limit</label>
+            <input type="number" id="j2c-limit" placeholder="0 = unbegrenzt" value="${cfg.userLimit||0}" style="width:100px" min="0" max="99">
+          </div>
+          <div class="row"><label>Control Panel</label>
+            <label class="toggle"><input type="checkbox" id="j2c-panel" ${cfg.panelEnabled?'checked':''} onchange="toggleJ2cPanel()"><span class="slider"></span></label>
+          </div>
+          <div id="j2c-panel-row" class="row" style="display:${cfg.panelEnabled?'flex':'none'}">
+            <label>Panel Channel</label>
+            <select id="j2c-panel-ch">${chOptions(gid,cfg.panelChannelId||'')}</select>
+          </div>
+          <div><button class="btn btn-primary" onclick="saveJ2C('${gid}')">✅ Speichern</button>
+          <span class="success" id="j2c-msg" style="margin-left:10px"></span></div>
+        </div>
+      </div>
+      <div class="section"><h2>Aktive Channels</h2>
+        ${Object.keys(cfg.activeChannels||{}).length
+          ? '<div style="color:var(--muted);font-size:.85rem">'+Object.entries(cfg.activeChannels||{}).map(([id,d])=>`<div>VC: <code>${id}</code> – Inhaber: <code>${d.ownerId}</code></div>`).join('')+'</div>'
+          : '<div class="empty">Keine aktiven J2C-Channels.</div>'}
+      </div>`;
+  }catch(e){document.getElementById('j2c-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
+}
+function toggleJ2cPanel(){
+  const show=document.getElementById('j2c-panel').checked;
+  document.getElementById('j2c-panel-row').style.display=show?'flex':'none';
+}
+async function saveJ2C(gid){
+  const payload={
+    triggerChannelId:document.getElementById('j2c-trigger').value.trim()||null,
+    categoryId:document.getElementById('j2c-category').value.trim()||null,
+    nameTemplate:document.getElementById('j2c-template').value.trim()||'{user}s Channel',
+    userLimit:parseInt(document.getElementById('j2c-limit').value)||0,
+    panelEnabled:document.getElementById('j2c-panel').checked,
+    panelChannelId:document.getElementById('j2c-panel-ch')?.value||null,
+  };
+  await api(`/api/j2c/${gid}`,{method:'POST',body:JSON.stringify(payload)});
+  flash('j2c-msg','✅ Gespeichert.');
 }
 // ── Automod excluded roles helpers ─────────────────────────────────
 async function addExclRole(gid){
@@ -629,6 +696,20 @@ function updatePreview(){
   const ep=document.getElementById('ep-img');if(ep){ep.src=img||'';ep.style.display=img?'block':'none';}
   const et=document.getElementById('ep-thumb');if(et){et.src=thumb||'';et.style.display=thumb?'block':'none';}
   const ep2=document.getElementById('embed-plain-preview');if(ep2){ep2.textContent=content;ep2.style.display=content?'block':'none';}
+}
+async function prefillFromMessage(){
+  const msgId=(document.getElementById('emb-msgid')?.value||'').trim();
+  const chId=document.getElementById('emb-channel')?.value;
+  if(!msgId||!chId)return;
+  const r=await api(`/api/embed/fetch?channelId=${chId}&messageId=${msgId}`).catch(()=>null);
+  if(!r||r.error)return;
+  const set=(id,val)=>{const e=document.getElementById(id);if(e)e.value=val||'';};
+  set('emb-content',r.content);set('emb-title',r.title);set('emb-desc',r.description);
+  set('emb-img',r.imageUrl);set('emb-thumb',r.thumbnailUrl);set('emb-footer',r.footer);
+  const col=document.getElementById('emb-color');if(col)col.value=r.color||'#5865f2';
+  const ts=document.getElementById('emb-ts');if(ts)ts.checked=r.timestamp!==false;
+  updatePreview();
+  flash('emb-msg','✅ Felder aus Originalnachricht geladen.');
 }
 async function sendEmbed(){
   const channelId=document.getElementById('emb-channel')?.value;
