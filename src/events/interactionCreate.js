@@ -62,6 +62,81 @@ module.exports = {
   name: 'interactionCreate',
   async execute(interaction) {
 
+    // ── J2C Panel Buttons ──────────────────────────────────────────────
+    if (interaction.isButton() && interaction.customId.startsWith('j2c_')) {
+      const parts = interaction.customId.split('_');
+      const action = parts[1];
+      const vcId = parts[2];
+
+      const j2c = db.get('j2c');
+      const gid = interaction.guild.id;
+      const cfg = j2c[gid];
+      const chData = cfg?.activeChannels?.[vcId];
+
+      if (!chData) return interaction.reply({ content: '❌ Channel nicht mehr aktiv.', ephemeral: true });
+      if (chData.ownerId !== interaction.user.id) return interaction.reply({ content: '❌ Nur der Channel-Inhaber kann das verwenden.', ephemeral: true });
+
+      const vc = await interaction.guild.channels.fetch(vcId).catch(() => null);
+      if (!vc) return interaction.reply({ content: '❌ Voice Channel nicht gefunden.', ephemeral: true });
+
+      if (action === 'lock') {
+        const everyone = interaction.guild.roles.everyone;
+        const overwrite = vc.permissionOverwrites.cache.get(everyone.id);
+        const locked = overwrite?.deny.has('Connect');
+        await vc.permissionOverwrites.edit(everyone, { Connect: locked ? null : false });
+        return interaction.reply({ content: locked ? '🔓 Channel entsperrt.' : '🔒 Channel gesperrt.', ephemeral: true });
+      }
+
+      if (action === 'delete') {
+        await vc.delete().catch(() => {});
+        delete cfg.activeChannels[vcId];
+        db.set('j2c', j2c);
+        if (chData.panelMessageId && chData.panelChannelId) {
+          const panelCh = await interaction.guild.channels.fetch(chData.panelChannelId).catch(() => null);
+          if (panelCh) { const m = await panelCh.messages.fetch(chData.panelMessageId).catch(()=>null); if(m) await m.delete().catch(()=>{}); }
+        }
+        return interaction.reply({ content: '💣 Channel gelöscht.', ephemeral: true });
+      }
+
+      if (action === 'limit') {
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`j2c_modal_limit_${vcId}`).setTitle('User Limit setzen')
+          .addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('limit').setLabel('Max. User (0 = unbegrenzt)').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3)
+          ));
+        return interaction.showModal(modal);
+      }
+
+      if (action === 'rename') {
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder().setCustomId(`j2c_modal_rename_${vcId}`).setTitle('Channel umbenennen')
+          .addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('name').setLabel('Neuer Name').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)
+          ));
+        return interaction.showModal(modal);
+      }
+    }
+
+    // ── J2C Modal Submit ────────────────────────────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('j2c_modal_')) {
+      const parts = interaction.customId.split('_');
+      const action = parts[2];
+      const vcId = parts[3];
+      const vc = await interaction.guild.channels.fetch(vcId).catch(() => null);
+      if (!vc) return interaction.reply({ content: '❌ Channel nicht mehr aktiv.', ephemeral: true });
+
+      if (action === 'limit') {
+        const limit = parseInt(interaction.fields.getTextInputValue('limit')) || 0;
+        await vc.setUserLimit(limit);
+        return interaction.reply({ content: `✅ Limit auf ${limit || 'unbegrenzt'} gesetzt.`, ephemeral: true });
+      }
+      if (action === 'rename') {
+        const name = interaction.fields.getTextInputValue('name');
+        await vc.setName(name.slice(0, 100));
+        return interaction.reply({ content: `✅ Channel umbenannt zu **${name}**.`, ephemeral: true });
+      }
+    }
+
     // ── Giveaway: Mitmachen Button ────────────────────────────────────
     if (interaction.isButton() && interaction.customId === 'giveaway_enter') {
       const giveaways = db.get('giveaways');
