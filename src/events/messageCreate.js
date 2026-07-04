@@ -1,3 +1,5 @@
+const { handleTextTrigger } = require('../utils/customCommands');
+const { logMod } = require('../utils/modlog');
 const { EmbedBuilder } = require('discord.js');
 const db = require('../utils/database');
 
@@ -14,6 +16,7 @@ async function applyAction(message, config, reason) {
     .setTimestamp();
 
   message.channel.send({ embeds: [embed] }).then(msg => setTimeout(() => msg.delete().catch(() => {}), 8000)).catch(() => {});
+  logMod(message.client, message.guild.id, { action:'automod', target:message.author, reason });
 
   try {
     if (config.action === 'warn') {
@@ -76,5 +79,8 @@ module.exports = {
         return applyAction(message, config, 'Spam (zu viele Nachrichten in kurzer Zeit)');
       }
     }
+
+    // Custom Text Triggers
+    await handleTextTrigger(message);
   },
 };

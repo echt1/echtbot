@@ -2,6 +2,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
         PermissionFlagsBits, ChannelType,
         ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const db = require('../utils/database');
+const { handleSlashCommand } = require('../utils/customCommands');
 
 async function createTicketChannel(interaction, prefix, categoryLabel, formData) {
   const guildConfig = db.get('tickets');
@@ -165,13 +166,18 @@ module.exports = {
     if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand() || interaction.isUserContextMenuCommand()) {
       const command = interaction.client.commands.get(interaction.commandName);
       if (!command) return;
-      try {
-        await command.execute(interaction);
-      } catch (err) {
-        console.error(`Fehler bei Command ${interaction.commandName}:`, err);
-        const msg = { content: '❌ Fehler beim Ausführen.', ephemeral: true };
-        interaction.replied || interaction.deferred ? interaction.followUp(msg).catch(()=>{}) : interaction.reply(msg).catch(()=>{});
+      if (command) {
+        try {
+          await command.execute(interaction);
+        } catch (err) {
+          console.error(`Fehler bei Command ${interaction.commandName}:`, err);
+          const msg = { content: '❌ Fehler beim Ausführen.', ephemeral: true };
+          interaction.replied || interaction.deferred ? interaction.followUp(msg).catch(()=>{}) : interaction.reply(msg).catch(()=>{});
+        }
+        return;
       }
+      // Custom Commands (falls kein built-in Command gefunden)
+      await handleSlashCommand(interaction);
       return;
     }
 
