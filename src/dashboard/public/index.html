@@ -99,6 +99,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <div class="nav-item" onclick="nav('ticketlog',this)">📋 Ticket-Log</div>
     <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
     <div class="nav-item" onclick="nav('warnings',this)">⚠️ Verwarnungen</div>
+    <div class="nav-item" onclick="nav('cc',this)">🔧 Custom Commands</div>
     <div class="nav-item" onclick="nav('j2c',this)">🔊 Join2Create</div>
     <div class="nav-item" onclick="nav('settings',this)">⚙️ Einstellungen</div>
     <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border)">
@@ -225,6 +226,21 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
       <div id="ticketlog-content"><div class="empty">Laden...</div></div>
     </div>
 
+    <!-- Custom Commands -->
+    <div id="page-cc" class="page">
+      <h1 class="ptitle">Custom Commands</h1>
+      <div id="cc-list-view">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <span id="cc-count" style="color:var(--muted);font-size:.85rem"></span>
+          <button class="btn btn-primary" onclick="ccNew()">➕ Neuer Command</button>
+        </div>
+        <div id="cc-list-content"><div class="empty">Laden...</div></div>
+      </div>
+      <div id="cc-editor-view" style="display:none">
+        <div id="cc-editor-content"></div>
+      </div>
+    </div>
+
     <!-- J2C -->
     <div id="page-j2c" class="page">
       <h1 class="ptitle">Join2Create Voice Channels</h1>
@@ -275,7 +291,7 @@ function nav(page,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if(el)el.classList.add('active');
-  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,j2c:loadJ2C,settings:loadSettings};
+  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,cc:loadCC,j2c:loadJ2C,settings:loadSettings};
   if(loaders[page])loaders[page]();
 }
 
@@ -1004,3 +1020,684 @@ async function delWarn(gid,uid){
 </script>
 </body>
 </html>
+<script>
+// ═══════════════════════════════════════════════════════════
+// CUSTOM COMMANDS BUILDER
+// ═══════════════════════════════════════════════════════════
+
+// State
+let cc = {
+  commands: [],
+  cmd: null,        // command being edited
+  selectedBlock: null, // { path: [], block }
+  gid: null,
+};
+
+// Block-Pfad-Map (id → path) für schnellen Zugriff
+const _blockPaths = new Map();
+
+// ── Utilities ──────────────────────────────────────────────
+function uuid4() { return Math.random().toString(36).slice(2,10); }
+
+function getBlockAtPath(flow, path) {
+  let blocks = flow;
+  let block = null;
+  for (let i = 0; i < path.length; i++) {
+    const seg = path[i];
+    if (typeof seg === 'number') { block = blocks[seg]; }
+    else { blocks = block[seg]; block = null; }
+  }
+  return block;
+}
+
+function setBlockAtPath(flow, path, newBlock) {
+  let blocks = flow;
+  for (let i = 0; i < path.length - 1; i++) {
+    const seg = path[i];
+    if (typeof seg === 'number') blocks = blocks[seg] ? [blocks[seg]] : blocks;
+    else { blocks = blocks[seg]; continue; }
+    if (i + 1 < path.length && typeof path[i+1] === 'string') {
+      blocks = blocks[path[i]][path[i+1]];
+      i++;
+    }
+  }
+  const idx = path[path.length - 1];
+  if (typeof idx === 'number') blocks[idx] = newBlock;
+}
+
+function deleteBlockAtPath(flow, path) {
+  if (path.length === 1) { flow.splice(path[0], 1); return; }
+  let blocks = flow;
+  for (let i = 0; i < path.length - 2; i++) {
+    const seg = path[i];
+    if (typeof seg === 'number') blocks = blocks[seg];
+    else blocks = blocks[seg];
+  }
+  const parentSeg = path[path.length - 2];
+  const idx = path[path.length - 1];
+  if (typeof parentSeg === 'string') blocks[parentSeg].splice(idx, 1);
+  else blocks.splice(idx, 1);
+}
+
+function moveBlockAtPath(flow, path, dir) {
+  let arr = flow;
+  if (path.length > 1) {
+    for (let i = 0; i < path.length - 2; i++) {
+      const seg = path[i];
+      arr = typeof seg === 'number' ? arr[seg] : arr[seg];
+    }
+    const parentSeg = path[path.length - 2];
+    arr = typeof parentSeg === 'string' ? arr[parentSeg] : arr;
+  }
+  const idx = path[path.length - 1];
+  if (dir === -1 && idx > 0) [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+  if (dir === 1 && idx < arr.length - 1) [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+}
+
+// ── Variable Hints ─────────────────────────────────────────
+function varHints(cmd) {
+  const builtins = '{user} {username} {server} {membercount} {channel} {date} {time}';
+  const inputs = (cmd?.options||[]).map(o=>`{input:${o.name}}`).join(' ');
+  return `<div style="font-size:.75rem;color:var(--muted);margin-top:4px">Variablen: <code>${builtins}${inputs?' '+inputs:''}</code></div>`;
+}
+
+// ── Load / List ────────────────────────────────────────────
+async function loadCC() {
+  const gid = firstGuild(); if (!gid) return;
+  cc.gid = gid;
+  await loadGuildData(gid);
+  cc.commands = await api(`/api/customcommands/${gid}`).catch(()=>[]);
+  renderCCList();
+}
+
+function renderCCList() {
+  document.getElementById('cc-list-view').style.display = 'block';
+  document.getElementById('cc-editor-view').style.display = 'none';
+  const el = document.getElementById('cc-list-content');
+  document.getElementById('cc-count').textContent = `${cc.commands.length} Commands`;
+  if (!cc.commands.length) { el.innerHTML = '<div class="empty">Noch keine Custom Commands. Erstell deinen ersten!</div>'; return; }
+  const rows = cc.commands.map(cmd => {
+    const typeIcon = cmd.type === 'slash' ? '/' : '💬';
+    const triggerMode = cmd.type === 'text' ? ` <span style="color:var(--muted);font-size:.78rem">(${cmd.textTriggerMode||'contains'})</span>` : '';
+    const actionCount = countBlocks(cmd.flow || []);
+    return `<tr>
+      <td><strong>${typeIcon} ${cmd.name}</strong>${triggerMode}${cmd.description?`<div style="font-size:.78rem;color:var(--muted)">${cmd.description}</div>`:''}</td>
+      <td style="color:var(--muted)">${actionCount} Block${actionCount!==1?'s':''}</td>
+      <td><label class="toggle"><input type="checkbox" ${cmd.enabled!==false?'checked':''} data-id="${cmd.id}" onchange="ccToggle(this)"><span class="slider"></span></label></td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-id="${cmd.id}" onclick="ccEdit(this.dataset.id)">✏️</button>
+        <button class="btn btn-danger btn-sm" data-id="${cmd.id}" onclick="ccDelete(this.dataset.id)">✕</button>
+      </div></td></tr>`;
+  }).join('');
+  el.innerHTML = `<div class="section" style="padding:0;overflow:hidden"><table>
+    <tr><th>Command</th><th>Flow</th><th>Aktiv</th><th></th></tr>${rows}</table></div>`;
+}
+
+function countBlocks(flow) {
+  let n = 0;
+  for (const b of flow) {
+    n++;
+    if (b.kind === 'condition') { n += countBlocks(b.then||[]); n += countBlocks(b.else||[]); }
+  }
+  return n;
+}
+
+async function ccToggle(el) {
+  const id = el.dataset.id;
+  await api(`/api/customcommands/${cc.gid}/${id}/toggle`, { method: 'PATCH' });
+  const cmd = cc.commands.find(c=>c.id===id);
+  if (cmd) cmd.enabled = el.checked;
+}
+
+async function ccDelete(id) {
+  if (!confirm('Command löschen?')) return;
+  await api(`/api/customcommands/${cc.gid}/${id}`, { method: 'DELETE' });
+  cc.commands = cc.commands.filter(c=>c.id!==id);
+  renderCCList();
+}
+
+// ── Editor ────────────────────────────────────────────────
+function ccNew() {
+  cc.cmd = { id: null, name: '', description: '', type: 'slash', textTriggerMode: 'contains', options: [], flow: [], cooldown: 0, enabled: true };
+  cc.selectedBlock = null;
+  renderCCEditor();
+}
+
+function ccEdit(id) {
+  const cmd = cc.commands.find(c=>c.id===id);
+  if (!cmd) return;
+  cc.cmd = JSON.parse(JSON.stringify(cmd)); // deep copy
+  cc.selectedBlock = null;
+  renderCCEditor();
+}
+
+function renderCCEditor() {
+  document.getElementById('cc-list-view').style.display = 'none';
+  document.getElementById('cc-editor-view').style.display = 'block';
+  const el = document.getElementById('cc-editor-content');
+  const cmd = cc.cmd;
+  const isNew = !cmd.id;
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h2 style="font-size:1.1rem">${isNew?'Neuer Command':'Command bearbeiten'}</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="ccCancelEdit()">← Zurück</button>
+        <button class="btn btn-primary" onclick="ccSave()">💾 Speichern</button>
+      </div>
+    </div>
+
+    <!-- Grundeinstellungen -->
+    <div class="section"><h2>Grundeinstellungen</h2>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="row">
+          <label>Typ</label>
+          <div style="display:flex;gap:8px">
+            <button class="btn ${cmd.type==='slash'?'btn-primary':'btn-ghost'} btn-sm" onclick="ccSetType('slash')">/ Slash Command</button>
+            <button class="btn ${cmd.type==='text'?'btn-primary':'btn-ghost'} btn-sm" onclick="ccSetType('text')">💬 Text-Trigger</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>${cmd.type==='slash'?'Command-Name':'Trigger-Text'}</label>
+          <input type="text" id="cc-name" value="${cmd.name}" placeholder="${cmd.type==='slash'?'z.B. info':'z.B. !help'}" style="width:200px" oninput="cc.cmd.name=this.value">
+        </div>
+        ${cmd.type==='slash'?`<div class="row"><label>Beschreibung</label>
+          <input type="text" id="cc-desc" value="${cmd.description||''}" placeholder="Was macht dieser Command?" style="flex:1;max-width:400px" oninput="cc.cmd.description=this.value">
+        </div>`:''}
+        ${cmd.type==='text'?`<div class="row"><label>Trigger-Modus</label>
+          <select id="cc-triggermode" onchange="cc.cmd.textTriggerMode=this.value">
+            <option value="contains" ${cmd.textTriggerMode==='contains'?'selected':''}>Contains (Nachricht enthält Text)</option>
+            <option value="startswith" ${cmd.textTriggerMode==='startswith'?'selected':''}>Starts With (Nachricht beginnt mit)</option>
+            <option value="exact" ${cmd.textTriggerMode==='exact'?'selected':''}>Exact (Nachricht ist genau dieser Text)</option>
+          </select>
+        </div>`:''}
+        <div class="row"><label>Cooldown (Sekunden)</label>
+          <input type="number" id="cc-cooldown" value="${cmd.cooldown||0}" min="0" max="3600" style="width:80px" oninput="cc.cmd.cooldown=parseInt(this.value)||0">
+        </div>
+      </div>
+    </div>
+
+    <!-- Slash Options -->
+    ${cmd.type==='slash'?`<div class="section"><h2>Eingabe-Optionen <span style="color:var(--muted);font-weight:400;font-size:.85rem">(Slash Command Parameter)</span></h2>
+      <div id="cc-options-list">${renderOptions()}</div>
+      <button class="btn btn-ghost btn-sm" onclick="ccAddOption()" style="margin-top:10px">+ Option hinzufügen</button>
+    </div>`:''}
+
+    <!-- Flow Editor -->
+    <div class="section"><h2>Command-Flow</h2>
+      <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Blöcke werden von oben nach unten ausgeführt. Klicke ➕ um einen Block hinzuzufügen.</p>
+      <div id="cc-flow-root">${renderFlow(cmd.flow||[], [])}</div>
+      <button class="btn btn-ghost btn-sm" onclick="ccAddBlock([])" style="margin-top:10px">➕ Block hinzufügen</button>
+    </div>
+
+    <!-- Block Config Panel -->
+    <div id="cc-block-config" style="display:none">
+      <div class="section" style="border:2px solid var(--accent)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h2 id="cc-config-title">Block konfigurieren</h2>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" onclick="ccSaveBlock()">✅ Übernehmen</button>
+            <button class="btn btn-ghost btn-sm" onclick="ccCloseConfig()">✕</button>
+          </div>
+        </div>
+        <div id="cc-block-config-inner"></div>
+      </div>
+    </div>`;
+}
+
+function ccSetType(type) {
+  cc.cmd.type = type;
+  renderCCEditor();
+}
+
+function ccCancelEdit() {
+  cc.cmd = null; cc.selectedBlock = null;
+  document.getElementById('cc-list-view').style.display = 'block';
+  document.getElementById('cc-editor-view').style.display = 'none';
+}
+
+async function ccSave() {
+  const cmd = cc.cmd;
+  if (!cmd.name.trim()) { alert('Name/Trigger darf nicht leer sein.'); return; }
+  let result;
+  if (cmd.id) {
+    result = await api(`/api/customcommands/${cc.gid}/${cmd.id}`, { method:'PUT', body:JSON.stringify(cmd) });
+    if (result.ok) {
+      const idx = cc.commands.findIndex(c=>c.id===cmd.id);
+      if (idx !== -1) cc.commands[idx] = result.cmd;
+    }
+  } else {
+    result = await api(`/api/customcommands/${cc.gid}`, { method:'POST', body:JSON.stringify(cmd) });
+    if (result.ok) { cc.cmd = result.cmd; cc.commands.push(result.cmd); }
+  }
+  if (result.ok) {
+    const saved = document.createElement('div');
+    saved.style.cssText = 'position:fixed;top:20px;right:20px;background:#3ba55c;color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:.9rem';
+    saved.textContent = '✅ Gespeichert!';
+    document.body.appendChild(saved);
+    setTimeout(()=>saved.remove(), 2000);
+    renderCCEditor();
+  } else {
+    alert('Fehler: ' + (result.error || 'Unbekannter Fehler'));
+  }
+}
+
+// ── Slash Options ──────────────────────────────────────────
+function renderOptions() {
+  const opts = cc.cmd.options || [];
+  if (!opts.length) return '<div style="color:var(--muted);font-size:.82rem">Keine Optionen. User können so keine Werte eingeben.</div>';
+  return opts.map((opt,i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <input type="text" value="${opt.name}" placeholder="name" style="width:120px" oninput="cc.cmd.options[${i}].name=this.value">
+      <select onchange="cc.cmd.options[${i}].type=this.value">
+        <option value="text" ${opt.type==='text'?'selected':''}>Text</option>
+        <option value="number" ${opt.type==='number'?'selected':''}>Zahl</option>
+        <option value="user" ${opt.type==='user'?'selected':''}>User</option>
+        <option value="channel" ${opt.type==='channel'?'selected':''}>Kanal</option>
+        <option value="role" ${opt.type==='role'?'selected':''}>Rolle</option>
+        <option value="boolean" ${opt.type==='boolean'?'selected':''}>Ja/Nein</option>
+      </select>
+      <input type="text" value="${opt.description||''}" placeholder="Beschreibung" style="flex:1;min-width:140px" oninput="cc.cmd.options[${i}].description=this.value">
+      <label class="toggle" title="Pflichtfeld"><input type="checkbox" ${opt.required?'checked':''} onchange="cc.cmd.options[${i}].required=this.checked"><span class="slider"></span></label>
+      <span style="font-size:.75rem;color:var(--muted)">Pflicht</span>
+      <button class="btn btn-danger btn-sm" onclick="ccRemoveOption(${i})">✕</button>
+    </div>`).join('');
+}
+
+function ccAddOption() {
+  cc.cmd.options = cc.cmd.options || [];
+  cc.cmd.options.push({ name: `option${cc.cmd.options.length+1}`, type: 'text', description: '', required: false });
+  document.getElementById('cc-options-list').innerHTML = renderOptions();
+}
+
+function ccRemoveOption(i) {
+  cc.cmd.options.splice(i, 1);
+  document.getElementById('cc-options-list').innerHTML = renderOptions();
+}
+
+// ── Flow Renderer ──────────────────────────────────────────
+const BLOCK_LABELS = {
+  reply_text: '💬 Antwort Text', reply_embed: '🎨 Antwort Embed',
+  random_response: '🎲 Zufalls-Antwort', send_message: '📤 Nachricht an Kanal',
+  dm: '📩 DM', add_role: '🟢 Rolle hinzufügen', remove_role: '🔴 Rolle entfernen',
+  kick: '👢 Kick', ban: '🔨 Ban', timeout: '🔇 Timeout',
+  set_nick: '✏️ Nickname setzen', delete_message: '🗑️ Nachricht löschen',
+  wait: '⏳ Warten', set_var: '📦 Variable setzen',
+  set_status: '🎮 Status ändern', react: '🔔 Reaktion',
+  condition: '🔀 Bedingung',
+};
+
+const COND_LABELS = { role:'Rolle', channel:'Kanal', permission:'Berechtigung', chance:'Zufall', compare:'Vergleich', user:'User' };
+
+function blockSummary(block) {
+  if (block.kind === 'condition') {
+    const c = block.condition || {};
+    const label = COND_LABELS[c.type] || c.type || '?';
+    return `<span style="color:var(--muted);font-size:.82rem">${label}</span>`;
+  }
+  const a = block.action || {};
+  if (a.type === 'reply_text') return `<span style="color:var(--muted);font-size:.82rem">${(a.content||'').slice(0,40)}</span>`;
+  if (a.type === 'add_role' || a.type === 'remove_role') {
+    const r = (roleCache[cc.gid]||[]).find(r=>r.id===a.roleId);
+    return r ? `<span style="color:var(--muted);font-size:.82rem">${r.name}</span>` : '';
+  }
+  if (a.type === 'wait') return `<span style="color:var(--muted);font-size:.82rem">${a.seconds||1}s</span>`;
+  if (a.type === 'set_var') return `<span style="color:var(--muted);font-size:.82rem">${a.scope==='global'?'🌐':'📍'} {${a.name||'?'}} = ${(a.value||'').slice(0,20)}</span>`;
+  return '';
+}
+
+function renderFlow(blocks, path) {
+  if (!blocks.length) return `<div style="color:var(--muted);font-size:.82rem;padding:8px;background:var(--bg);border-radius:6px;border:1px dashed var(--border)">Leer – ➕ Block hinzufügen</div>`;
+  return blocks.map((block, i) => {
+    const p = [...path, i];
+    const ps = JSON.stringify(p);
+    const label = block.kind === 'condition' ? '🔀 Bedingung' : (BLOCK_LABELS[block.action?.type] || block.action?.type || '?');
+    const summary = blockSummary(block);
+    const isFirst = i === 0, isLast = i === blocks.length - 1;
+
+    let inner = '';
+    if (block.kind === 'condition') {
+      inner = `
+        <div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+          <div style="font-size:.8rem;color:#3ba55c;font-weight:600;margin-bottom:6px">✅ Dann (${(block.then||[]).length} Blöcke):</div>
+          <div style="padding-left:12px">${renderFlow(block.then||[], [...p,'then'])}</div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-path='${JSON.stringify([...p,'then'])}' onclick="ccAddBlock(JSON.parse(this.dataset.path))">➕ Then-Block</button>
+          <div style="font-size:.8rem;color:#ed4245;font-weight:600;margin:10px 0 6px">❌ Sonst (${(block.else||[]).length} Blöcke):</div>
+          <div style="padding-left:12px">${renderFlow(block.else||[], [...p,'else'])}</div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-path='${JSON.stringify([...p,'else'])}' onclick="ccAddBlock(JSON.parse(this.dataset.path))">➕ Else-Block</button>
+        </div>`;
+    }
+
+    return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--surface2)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:.9rem;font-weight:500;flex:1">${label} ${summary}</span>
+        <button class="btn btn-ghost btn-sm" data-path='${ps}' onclick="ccOpenConfig(JSON.parse(this.dataset.path))">✏️</button>
+        <button class="btn btn-ghost btn-sm" ${isFirst?'disabled':''} data-path='${ps}' onclick="ccMoveBlock(JSON.parse(this.dataset.path),-1)">↑</button>
+        <button class="btn btn-ghost btn-sm" ${isLast?'disabled':''} data-path='${ps}' onclick="ccMoveBlock(JSON.parse(this.dataset.path),1)">↓</button>
+        <button class="btn btn-danger btn-sm" data-path='${ps}' onclick="ccDeleteBlock(JSON.parse(this.dataset.path))">✕</button>
+      </div>
+      ${inner}
+    </div>`;
+  }).join('');
+}
+
+function rerenderFlow() {
+  const el = document.getElementById('cc-flow-root');
+  if (el) el.innerHTML = renderFlow(cc.cmd.flow||[], []);
+}
+
+// ── Block Actions ──────────────────────────────────────────
+function ccAddBlock(path) {
+  // Zeige Block-Typ-Auswahl
+  cc._addingToPath = path;
+  document.getElementById('cc-block-config').style.display = 'block';
+  document.getElementById('cc-config-title').textContent = 'Block-Typ wählen';
+  document.getElementById('cc-block-config-inner').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">
+      <div style="font-size:.82rem;color:var(--muted);font-weight:600;grid-column:1/-1">⚡ Aktionen</div>
+      ${Object.entries(BLOCK_LABELS).filter(([k])=>k!=='condition').map(([k,v])=>
+        `<button class="btn btn-ghost" onclick="ccPickBlockType('action','${k}')" style="text-align:left;font-size:.82rem">${v}</button>`
+      ).join('')}
+      <div style="font-size:.82rem;color:var(--muted);font-weight:600;grid-column:1/-1;margin-top:8px">🔀 Konditionen</div>
+      ${Object.entries(COND_LABELS).map(([k,v])=>
+        `<button class="btn btn-ghost" onclick="ccPickBlockType('condition','${k}')" style="text-align:left;font-size:.82rem">🔀 ${v}</button>`
+      ).join('')}
+    </div>`;
+}
+
+function ccPickBlockType(kind, type) {
+  const path = cc._addingToPath || [];
+  let newBlock;
+  if (kind === 'condition') {
+    newBlock = { id: uuid4(), kind: 'condition', condition: { type }, then: [], else: [] };
+  } else {
+    newBlock = { id: uuid4(), kind: 'action', action: { type } };
+  }
+
+  // Block in den Flow einfügen
+  function insertAt(flow, path) {
+    if (!path.length) { flow.push(newBlock); return; }
+    const seg = path[0];
+    if (typeof seg === 'number') insertAt(flow[seg], path.slice(1));
+    else insertAt(flow[seg], path.slice(1));
+  }
+  insertAt(cc.cmd.flow, path);
+  cc._addingToPath = null;
+
+  // Direkt in Konfiguration
+  cc.selectedBlock = { path: [cc.cmd.flow.length - 1], block: newBlock };
+  renderCCEditor();
+  // Find the new block path and open config
+  const newPath = findBlockPath(cc.cmd.flow, newBlock.id);
+  if (newPath) ccOpenConfig(newPath);
+}
+
+function findBlockPath(flow, id, prefix=[]) {
+  for (let i = 0; i < flow.length; i++) {
+    if (flow[i].id === id) return [...prefix, i];
+    if (flow[i].kind === 'condition') {
+      const t = findBlockPath(flow[i].then||[], id, [...prefix,i,'then']);
+      if (t) return t;
+      const e = findBlockPath(flow[i].else||[], id, [...prefix,i,'else']);
+      if (e) return e;
+    }
+  }
+  return null;
+}
+
+function ccDeleteBlock(path) {
+  if (!confirm('Block löschen?')) return;
+  function del(flow, path) {
+    if (path.length === 1) { flow.splice(path[0], 1); return; }
+    const seg = path[0];
+    if (typeof seg === 'string') del(flow[seg], path.slice(1));
+    else del(flow[seg], path.slice(1));
+  }
+  del(cc.cmd.flow, path);
+  rerenderFlow();
+  ccCloseConfig();
+}
+
+function ccMoveBlock(path, dir) {
+  function move(flow, path) {
+    if (path.length === 1) {
+      const i = path[0];
+      if (dir === -1 && i > 0) [flow[i-1],flow[i]] = [flow[i],flow[i-1]];
+      if (dir === 1 && i < flow.length-1) [flow[i],flow[i+1]] = [flow[i+1],flow[i]];
+      return;
+    }
+    const seg = path[0];
+    if (typeof seg === 'string') move(flow[seg], path.slice(1));
+    else move(flow[seg], path.slice(1));
+  }
+  move(cc.cmd.flow, path);
+  rerenderFlow();
+}
+
+// ── Block Config ───────────────────────────────────────────
+function ccOpenConfig(path) {
+  function getBlock(flow, path) {
+    const seg = path[0];
+    if (path.length === 1) return typeof seg === 'number' ? flow[seg] : flow[seg];
+    return getBlock(typeof seg === 'string' ? flow[seg] : flow[seg], path.slice(1));
+  }
+  const block = getBlock(cc.cmd.flow, path);
+  if (!block) return;
+  cc.selectedBlock = { path, block };
+  document.getElementById('cc-block-config').style.display = 'block';
+  const label = block.kind === 'condition' ? `🔀 Bedingung: ${COND_LABELS[block.condition?.type]||''}` : (BLOCK_LABELS[block.action?.type]||'Block');
+  document.getElementById('cc-config-title').textContent = label + ' konfigurieren';
+  document.getElementById('cc-block-config-inner').innerHTML = renderBlockConfigForm(block);
+  document.getElementById('cc-block-config').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function ccCloseConfig() {
+  document.getElementById('cc-block-config').style.display = 'none';
+  cc.selectedBlock = null;
+}
+
+function ccSaveBlock() {
+  // Lese Formularwerte aus dem Config-Panel
+  const inner = document.getElementById('cc-block-config-inner');
+  const { path, block } = cc.selectedBlock || {};
+  if (!path || !block) return;
+
+  const getVal = id => document.getElementById(id)?.value ?? '';
+  const getBool = id => document.getElementById(id)?.checked ?? false;
+
+  if (block.kind === 'condition') {
+    const c = block.condition;
+    if (c.type === 'role') { c.roleId = getVal('cfg-role'); c.mode = getVal('cfg-mode'); }
+    if (c.type === 'channel') {
+      c.channelIds = [...document.querySelectorAll('#cfg-channels option:checked')].map(o=>o.value);
+    }
+    if (c.type === 'permission') c.permission = getVal('cfg-perm');
+    if (c.type === 'chance') c.percent = Number(getVal('cfg-percent')) || 50;
+    if (c.type === 'compare') { c.valueA = getVal('cfg-va'); c.operator = getVal('cfg-op'); c.valueB = getVal('cfg-vb'); }
+    if (c.type === 'user') c.userId = getVal('cfg-userid');
+  } else {
+    const a = block.action;
+    if (a.type === 'reply_text') { a.content = getVal('cfg-content'); a.ephemeral = getBool('cfg-ephemeral'); }
+    if (a.type === 'reply_embed') {
+      a.content = getVal('cfg-content'); a.ephemeral = getBool('cfg-ephemeral');
+      a.embed = { title:getVal('cfg-etitle'), description:getVal('cfg-edesc'), color:getVal('cfg-ecolor'), imageUrl:getVal('cfg-eimg'), thumbnailUrl:getVal('cfg-ethumb'), footer:getVal('cfg-efooter'), timestamp:getBool('cfg-ets') };
+    }
+    if (a.type === 'random_response') {
+      a.responses = [...document.querySelectorAll('.cfg-rr')].map(el=>el.value).filter(Boolean);
+      a.ephemeral = getBool('cfg-ephemeral');
+    }
+    if (a.type === 'send_message') { a.channelId = getVal('cfg-chan'); a.content = getVal('cfg-content'); }
+    if (a.type === 'dm') { a.targetInput = getVal('cfg-target'); a.content = getVal('cfg-content'); }
+    if (a.type === 'add_role' || a.type === 'remove_role') a.roleId = getVal('cfg-role');
+    if (a.type === 'kick' || a.type === 'ban') { a.targetInput = getVal('cfg-target'); a.reason = getVal('cfg-reason'); }
+    if (a.type === 'timeout') { a.targetInput = getVal('cfg-target'); a.reason = getVal('cfg-reason'); a.durationMinutes = Number(getVal('cfg-dur'))||10; }
+    if (a.type === 'set_nick') { a.targetInput = getVal('cfg-target'); a.nick = getVal('cfg-nick'); }
+    if (a.type === 'wait') a.seconds = Number(getVal('cfg-secs'))||1;
+    if (a.type === 'set_var') { a.name = getVal('cfg-varname'); a.value = getVal('cfg-varval'); a.scope = getVal('cfg-scope'); }
+    if (a.type === 'set_status') { a.statusType = getVal('cfg-stype'); a.text = getVal('cfg-content'); }
+    if (a.type === 'react') a.emoji = getVal('cfg-emoji');
+  }
+
+  rerenderFlow();
+  ccCloseConfig();
+}
+
+function renderBlockConfigForm(block) {
+  const gid = cc.gid;
+  const userInputOptions = (cc.cmd.options||[]).filter(o=>o.type==='user').map(o=>`<option value="${o.name}">${o.name}</option>`).join('');
+  const vh = varHints(cc.cmd);
+
+  if (block.kind === 'condition') {
+    const c = block.condition;
+    if (c.type === 'role') return `
+      <div class="row" style="margin-bottom:10px"><label>Rolle</label>
+        <select id="cfg-role"><option value="">Wählen...</option>${roleOptions(gid,c.roleId)}</select>
+      </div>
+      <div class="row"><label>Bedingung</label>
+        <select id="cfg-mode"><option value="has" ${c.mode!=='hasnt'?'selected':''}>User hat die Rolle</option><option value="hasnt" ${c.mode==='hasnt'?'selected':''}>User hat die Rolle NICHT</option></select>
+      </div>`;
+    if (c.type === 'channel') return `
+      <div><label style="font-size:.85rem;color:var(--muted);display:block;margin-bottom:6px">Erlaubte Channels (Mehrfachauswahl mit Strg/Cmd)</label>
+        <select id="cfg-channels" multiple style="width:100%;height:120px">${(chCache[gid]||[]).map(ch=>`<option value="${ch.id}" ${(c.channelIds||[]).includes(ch.id)?'selected':''}>#${ch.name}</option>`).join('')}</select>
+      </div>`;
+    if (c.type === 'permission') return `
+      <div class="row"><label>Berechtigung</label>
+        <select id="cfg-perm">
+          ${['Administrator','ManageGuild','ManageChannels','ManageRoles','KickMembers','BanMembers','ModerateMembers','ManageMessages'].map(p=>`<option value="${p}" ${c.permission===p?'selected':''}>${p}</option>`).join('')}
+        </select>
+      </div>`;
+    if (c.type === 'chance') return `
+      <div class="row"><label>Wahrscheinlichkeit (%)</label>
+        <input type="number" id="cfg-percent" value="${c.percent||50}" min="0" max="100" style="width:80px">
+        <span style="color:var(--muted);font-size:.82rem">0–100</span>
+      </div>`;
+    if (c.type === 'compare') return `
+      <div class="row" style="margin-bottom:10px"><label>Wert A</label>
+        <input type="text" id="cfg-va" value="${c.valueA||''}" placeholder="{input:name} oder Text" style="flex:1;max-width:200px">
+      </div>${vh}
+      <div class="row" style="margin:10px 0"><label>Operator</label>
+        <select id="cfg-op">${['==','!=','>','<','>=','<=','contains'].map(op=>`<option value="${op}" ${c.operator===op?'selected':''}>${op}</option>`).join('')}</select>
+      </div>
+      <div class="row"><label>Wert B</label>
+        <input type="text" id="cfg-vb" value="${c.valueB||''}" placeholder="Vergleichswert" style="flex:1;max-width:200px">
+      </div>`;
+    if (c.type === 'user') return `
+      <div class="row"><label>User-ID</label>
+        <input type="text" id="cfg-userid" value="${c.userId||''}" placeholder="Discord User-ID" style="width:200px">
+      </div>`;
+    return '<div class="empty">Kein Config für diesen Typ.</div>';
+  }
+
+  const a = block.action;
+  const ephOpt = `<div class="row" style="margin-top:10px"><label>Nur für ausführenden User sichtbar</label><label class="toggle"><input type="checkbox" id="cfg-ephemeral" ${a.ephemeral?'checked':''}><span class="slider"></span></label></div>`;
+  const targetOpt = `<div class="row" style="margin-bottom:10px"><label>Ziel-User (Input)</label>
+    <select id="cfg-target"><option value="">Ausführender User</option>${userInputOptions}</select>
+  </div>`;
+
+  if (a.type === 'reply_text') return `
+    <div><label style="font-size:.85rem;color:var(--muted);display:block;margin-bottom:4px">Text</label>
+      <textarea id="cfg-content" style="width:100%;min-height:80px">${a.content||''}</textarea>${vh}
+    </div>${ephOpt}`;
+
+  if (a.type === 'reply_embed') return `
+    <div class="row" style="margin-bottom:8px"><label>Text über Embed</label>
+      <input type="text" id="cfg-content" value="${a.content||''}" style="flex:1;max-width:300px" placeholder="Optional">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label style="font-size:.78rem;color:var(--muted)">Titel</label><input type="text" id="cfg-etitle" value="${a.embed?.title||''}" style="width:100%"></div>
+      <div><label style="font-size:.78rem;color:var(--muted)">Farbe</label><input type="color" id="cfg-ecolor" value="${a.embed?.color||'#5865f2'}"></div>
+      <div style="grid-column:1/-1"><label style="font-size:.78rem;color:var(--muted)">Beschreibung</label><textarea id="cfg-edesc" style="width:100%;min-height:60px">${a.embed?.description||''}</textarea>${vh}</div>
+      <div><label style="font-size:.78rem;color:var(--muted)">Bild-URL</label><input type="text" id="cfg-eimg" value="${a.embed?.imageUrl||''}" style="width:100%" placeholder="https://..."></div>
+      <div><label style="font-size:.78rem;color:var(--muted)">Thumbnail-URL</label><input type="text" id="cfg-ethumb" value="${a.embed?.thumbnailUrl||''}" style="width:100%" placeholder="https://..."></div>
+      <div><label style="font-size:.78rem;color:var(--muted)">Footer</label><input type="text" id="cfg-efooter" value="${a.embed?.footer||''}" style="width:100%"></div>
+      <div class="row"><label style="min-width:unset">Timestamp</label><label class="toggle"><input type="checkbox" id="cfg-ets" ${a.embed?.timestamp?'checked':''}><span class="slider"></span></label></div>
+    </div>${ephOpt}`;
+
+  if (a.type === 'random_response') {
+    const resps = a.responses?.length ? a.responses : [''];
+    return `
+      <div><label style="font-size:.85rem;color:var(--muted);display:block;margin-bottom:6px">Antworten (eine wird zufällig gewählt)</label>
+        <div id="cfg-rr-list">${resps.map(r=>`<div style="display:flex;gap:6px;margin-bottom:6px"><input type="text" class="cfg-rr" value="${r.replace(/"/g,'&quot;')}" style="flex:1" placeholder="Antwort..."><button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button></div>`).join('')}</div>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cfg-rr-list').insertAdjacentHTML('beforeend','<div style=\\'display:flex;gap:6px;margin-bottom:6px\\'><input type=\\'text\\' class=\\'cfg-rr\\' style=\\'flex:1\\' placeholder=\\'Antwort...\\'><button class=\\'btn btn-danger btn-sm\\' onclick=\\'this.parentElement.remove()\\'>✕</button></div>')">+ Antwort</button>
+        ${vh}
+      </div>${ephOpt}`;
+  }
+
+  if (a.type === 'send_message') return `
+    <div class="row" style="margin-bottom:10px"><label>Ziel-Channel</label>
+      <select id="cfg-chan"><option value="">Gleicher Channel</option>${chOptions(gid,a.channelId)}</select>
+    </div>
+    <div><label style="font-size:.85rem;color:var(--muted);display:block;margin-bottom:4px">Inhalt</label>
+      <textarea id="cfg-content" style="width:100%;min-height:60px">${a.content||''}</textarea>${vh}
+    </div>`;
+
+  if (a.type === 'dm') return `${targetOpt}
+    <div><label style="font-size:.85rem;color:var(--muted);display:block;margin-bottom:4px">Nachricht</label>
+      <textarea id="cfg-content" style="width:100%;min-height:60px">${a.content||''}</textarea>${vh}
+    </div>`;
+
+  if (a.type === 'add_role' || a.type === 'remove_role') return `
+    <div class="row"><label>Rolle</label>
+      <select id="cfg-role"><option value="">Wählen...</option>${roleOptions(gid,a.roleId)}</select>
+    </div>`;
+
+  if (a.type === 'kick' || a.type === 'ban') return `${targetOpt}
+    <div class="row"><label>Grund</label>
+      <input type="text" id="cfg-reason" value="${a.reason||''}" style="flex:1;max-width:300px" placeholder="Optional">
+    </div>${vh}`;
+
+  if (a.type === 'timeout') return `${targetOpt}
+    <div class="row" style="margin-bottom:10px"><label>Dauer (Minuten)</label>
+      <input type="number" id="cfg-dur" value="${a.durationMinutes||10}" min="1" max="40320" style="width:80px">
+    </div>
+    <div class="row"><label>Grund</label>
+      <input type="text" id="cfg-reason" value="${a.reason||''}" style="flex:1;max-width:300px" placeholder="Optional">
+    </div>`;
+
+  if (a.type === 'set_nick') return `${targetOpt}
+    <div class="row"><label>Neuer Nick</label>
+      <input type="text" id="cfg-nick" value="${a.nick||''}" style="flex:1;max-width:300px" placeholder="Leer = zurücksetzen">
+    </div>${vh}`;
+
+  if (a.type === 'wait') return `
+    <div class="row"><label>Wartezeit (Sekunden)</label>
+      <input type="number" id="cfg-secs" value="${a.seconds||1}" min="1" max="10" style="width:80px">
+      <span style="color:var(--muted);font-size:.82rem">max. 10</span>
+    </div>`;
+
+  if (a.type === 'set_var') return `
+    <div class="row" style="margin-bottom:10px"><label>Variable Name</label>
+      <input type="text" id="cfg-varname" value="${a.name||''}" placeholder="meinVar" style="width:160px">
+    </div>
+    <div class="row" style="margin-bottom:10px"><label>Wert</label>
+      <input type="text" id="cfg-varval" value="${a.value||''}" placeholder="Wert oder {input:...}" style="flex:1;max-width:300px">
+    </div>${vh}
+    <div class="row"><label>Scope</label>
+      <select id="cfg-scope">
+        <option value="local" ${a.scope!=='global'?'selected':''}>📍 Lokal (nur diese Ausführung)</option>
+        <option value="global" ${a.scope==='global'?'selected':''}>🌐 Global (persistent)</option>
+      </select>
+    </div>`;
+
+  if (a.type === 'set_status') return `
+    <div class="row" style="margin-bottom:10px"><label>Typ</label>
+      <select id="cfg-stype">
+        <option value="watching" ${a.statusType==='watching'?'selected':''}>👀 Watching</option>
+        <option value="playing" ${a.statusType==='playing'?'selected':''}>🎮 Playing</option>
+        <option value="listening" ${a.statusType==='listening'?'selected':''}>🎧 Listening</option>
+        <option value="competing" ${a.statusType==='competing'?'selected':''}>🏆 Competing</option>
+      </select>
+    </div>
+    <div class="row"><label>Text</label>
+      <input type="text" id="cfg-content" value="${a.text||''}" style="flex:1;max-width:300px">
+    </div>${vh}`;
+
+  if (a.type === 'react') return `
+    <div class="row"><label>Emoji</label>
+      <input type="text" id="cfg-emoji" value="${a.emoji||'✅'}" style="width:80px" placeholder="✅">
+      <span style="color:var(--muted);font-size:.82rem">Standard-Emoji oder Custom-Emoji-ID</span>
+    </div>`;
+
+  return '<div class="empty">Kein Config für diesen Typ.</div>';
+}
+</script>
