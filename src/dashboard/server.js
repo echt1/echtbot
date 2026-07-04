@@ -365,7 +365,102 @@ function startDashboard(client) {
     res.json({ ok: true });
   });
 
-  app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
+
+  // ── Custom Commands ────────────────────────────────────────────────────────
+  const { REST, Routes } = require('discord.js');
+  const { randomUUID } = require('crypto');
+
+  async function registerCustomSlashCmd(guildId, cmd) {
+    if (!process.env.CLIENT_ID) return null;
+    const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+    const name = cmd.name.toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 32) || 'cmd';
+    const body = {
+      name,
+      description: (cmd.description || 'Custom Command').slice(0, 100),
+      options: (cmd.options || []).map(opt => ({
+        name: opt.name.toLowerCase().replace(/[^a-z0-9-_]/g,'').slice(0,32) || 'option',
+        description: (opt.description || opt.name || 'option').slice(0,100),
+        type: { text:3, number:10, user:6, channel:7, role:8, boolean:5 }[opt.type] || 3,
+        required: !!opt.required,
+      })),
+    };
+    try {
+      const result = cmd.discordCmdId
+        ? await rest.patch(Routes.applicationGuildCommand(process.env.CLIENT_ID, guildId, cmd.discordCmdId), { body })
+        : await rest.post(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body });
+      return result.id;
+    } catch (err) {
+      console.error('[CustomCmd] Discord API error:', err.message);
+      return null;
+    }
+  }
+
+  async function deleteCustomSlashCmd(guildId, discordCmdId) {
+    if (!process.env.CLIENT_ID || !discordCmdId) return;
+    const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+    await rest.delete(Routes.applicationGuildCommand(process.env.CLIENT_ID, guildId, discordCmdId)).catch(() => {});
+  }
+
+  app.get('/api/customcommands/:gid', auth, (req, res) => {
+    const cmds = db.get('customcommands');
+    res.json(cmds[req.params.gid] || []);
+  });
+
+  app.post('/api/customcommands/:gid', auth, async (req, res) => {
+    const cmd = { ...req.body, id: randomUUID().slice(0,8), createdAt: Date.now(), enabled: true };
+    const cmds = db.get('customcommands');
+    const gid = req.params.gid;
+    cmds[gid] = cmds[gid] || [];
+    if (cmd.type === 'slash') {
+      const discordId = await registerCustomSlashCmd(gid, cmd);
+      if (discordId) cmd.discordCmdId = discordId;
+    }
+    cmds[gid].push(cmd);
+    db.set('customcommands', cmds);
+    res.json({ ok: true, cmd });
+  });
+
+  app.put('/api/customcommands/:gid/:id', auth, async (req, res) => {
+    const cmds = db.get('customcommands');
+    const gid = req.params.gid;
+    const idx = (cmds[gid] || []).findIndex(c => c.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Not found' });
+    const updated = { ...cmds[gid][idx], ...req.body, id: req.params.id };
+    if (updated.type === 'slash') {
+      const discordId = await registerCustomSlashCmd(gid, updated);
+      if (discordId) updated.discordCmdId = discordId;
+    }
+    cmds[gid][idx] = updated;
+    db.set('customcommands', cmds);
+    res.json({ ok: true, cmd: updated });
+  });
+
+  app.delete('/api/customcommands/:gid/:id', auth, async (req, res) => {
+    const cmds = db.get('customcommands');
+    const gid = req.params.gid;
+    const cmd = (cmds[gid] || []).find(c => c.id === req.params.id);
+    if (cmd?.discordCmdId) await deleteCustomSlashCmd(gid, cmd.discordCmdId);
+    cmds[gid] = (cmds[gid] || []).filter(c => c.id !== req.params.id);
+    db.set('customcommands', cmds);
+    res.json({ ok: true });
+  });
+
+  app.patch('/api/customcommands/:gid/:id/toggle', auth, (req, res) => {
+    const cmds = db.get('customcommands');
+    const gid = req.params.gid;
+    const cmd = (cmds[gid] || []).find(c => c.id === req.params.id);
+    if (!cmd) return res.status(404).json({ error: 'Not found' });
+    cmd.enabled = !cmd.enabled;
+    db.set('customcommands', cmds);
+    res.json({ ok: true, enabled: cmd.enabled });
+  });
+
+  app.get('/api/customcommands/:gid/globals', auth, (req, res) => {
+    const cmds = db.get('customcommands');
+    res.json(cmds.__globals || {});
+  });
+
+    app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
 }
 
 module.exports = { startDashboard };
