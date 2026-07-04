@@ -12,6 +12,7 @@ const FILES = {
   counting: path.join(DATA_DIR, 'counting.json'),
   ticketlogs: path.join(DATA_DIR, 'ticketlogs.json'),
   giveaways: path.join(DATA_DIR, 'giveaways.json'),
+  j2c: path.join(DATA_DIR, 'j2c.json'),
 };
 
 function readJSON(file) {
