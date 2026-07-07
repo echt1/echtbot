@@ -2,7 +2,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
         PermissionFlagsBits, ChannelType,
         ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const db = require('../utils/database');
-const { handleSlashCommand } = require('../utils/customCommands');
+const { handleSlashCommand, handleComponentInteraction, handleModalInteraction } = require('../utils/customCommands');
 
 async function createTicketChannel(interaction, prefix, categoryLabel, formData) {
   const guildConfig = db.get('tickets');
@@ -62,6 +62,14 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData)
 module.exports = {
   name: 'interactionCreate',
   async execute(interaction) {
+
+    // ── Custom Commands: Buttons / Selects / Modals ─────────────────────
+    if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith('cc|')) {
+      return handleComponentInteraction(interaction);
+    }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('cc|')) {
+      return handleModalInteraction(interaction);
+    }
 
     // ── J2C Panel Buttons ──────────────────────────────────────────────
     if (interaction.isButton() && interaction.customId.startsWith('j2c_')) {
