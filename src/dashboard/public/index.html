@@ -18,7 +18,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;mi
 .sidebar .logo{font-size:1.1rem;font-weight:700;padding:8px 12px 20px;color:var(--accent)}
 .nav-item{padding:10px 12px;border-radius:8px;cursor:pointer;font-size:.9rem;color:var(--muted);transition:.15s;display:flex;align-items:center;gap:10px}
 .nav-item:hover{background:var(--surface2);color:var(--text)}.nav-item.active{background:var(--accent);color:#fff}
-.main{margin-left:220px;padding:32px;max-width:1000px}
+.main{margin-left:220px;padding:32px}
 .page{display:none}.page.active{display:block}
 h1.ptitle{font-size:1.4rem;margin-bottom:24px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px}
@@ -1054,6 +1054,10 @@ const BLOCK_DEFS = {
     { type:'set_var',        icon:'📦', label:'Set Variable',        desc:'Variable setzen',              color:'#5a3e8e' },
     { type:'set_status',     icon:'🎮', label:'Set Status',          desc:'Bot-Status ändern',            color:'#5a3e8e' },
     { type:'react',          icon:'🔔', label:'React',               desc:'Reaktion hinzufügen',          color:'#1e6eb5' },
+    { type:'pin_message',    icon:'📌', label:'Pin Message',         desc:'Nachricht anpinnen',            color:'#1e6eb5' },
+    { type:'create_channel', icon:'➕', label:'Create Channel',      desc:'Kanal erstellen',               color:'#5a3e8e' },
+    { type:'delete_channel', icon:'🗑️',  label:'Delete Channel',      desc:'Kanal löschen',                 color:'#c0392b' },
+    { type:'open_form',      icon:'📋', label:'Open Form',           desc:'Formular öffnen (Modal)',       color:'#5a3e8e' },
   ],
   conditions: [
     { type:'condition_role',       icon:'🛡️', label:'Role Condition',       desc:'User hat/hat nicht Rolle',     color:'#1e7e5a' },
@@ -1260,6 +1264,10 @@ function renderCCNode(node){
     (node.buttons||[]).forEach((b,i)=>{const p=node.buttons.length>1?20+i*(60/(node.buttons.length-1)):50;outP+=`<div class="ccport port-btn" style="left:${p}%;transform:translateX(-50%)" title="Btn: ${b.label||i}" data-nid="${node.id}" data-port="btn_${i}" onmousedown="ccPMD(event,'${node.id}','btn_${i}')"></div>`;});
     (node.selects||[]).forEach((s,i)=>{const p=node.selects.length>1?15+i*(70/(node.selects.length-1)):50;outP+=`<div class="ccport port-sel" style="left:${p}%;transform:translateX(-50%)" title="Sel: ${s.label||i}" data-nid="${node.id}" data-port="sel_${i}" onmousedown="ccPMD(event,'${node.id}','sel_${i}')"></div>`;});
   }
+  const branchLegend=(node.buttons?.length||node.selects?.length)?`<div style="display:flex;flex-direction:column;gap:2px;padding:0 8px 6px;font-size:.68rem">
+    ${(node.buttons||[]).map((b,i)=>`<div style="display:flex;align-items:center;gap:5px;color:#f1c40f"><span style="width:6px;height:6px;border-radius:50%;background:#f1c40f;flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔘 ${(b.label||'Button '+(i+1))}</span></div>`).join('')}
+    ${(node.selects||[]).map((s,i)=>`<div style="display:flex;align-items:center;gap:5px;color:#e67e22"><span style="width:6px;height:6px;border-radius:50%;background:#e67e22;flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔽 ${(s.label||'Option '+(i+1))}</span></div>`).join('')}
+  </div>`:'';
 
   const label=isTr?(node.type==='slash'?`/${CC.cmd.name||'cmd'}`:node.type==='text'?`💬 "${CC.cmd.name||'trigger'}"`:def.label):def.label;
   const summary=getCCNodeSummary(node);
@@ -1274,6 +1282,7 @@ function renderCCNode(node){
     </div>
     <div class="ccnb">${summary}</div>
     ${isCo?`<div style="display:flex;justify-content:space-around;padding:0 10px 6px;font-size:.7rem"><span style="color:#3ba55c">✅ Then</span><span style="color:#ed4245">❌ Else</span></div>`:''}
+    ${branchLegend}
     <div style="position:relative;height:10px">${outP}</div>
   </div>`;
 }
@@ -1448,6 +1457,53 @@ function renderCCCfg(nodeId){
       case 'set_var':     html+=inp('name','Variable Name','meinVar')+inp('value','Wert','{input:...}')+hints+`<label style="font-size:.8rem;color:var(--muted);display:block;margin:7px 0 3px">Scope</label><select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.scope=this.value" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)"><option value="local" ${c.scope!=='global'?'selected':''}>📍 Lokal</option><option value="global" ${c.scope==='global'?'selected':''}>🌐 Global</option></select>`;break;
       case 'set_status':  html+=`<label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Typ</label><select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.statusType=this.value" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:9px">${['watching','playing','listening','competing'].map(t=>`<option value="${t}" ${c.statusType===t?'selected':''}>${t}</option>`).join('')}</select>${inp('text','Status Text','z.B. mit dem Server!')}`;break;
       case 'react':       html+=inp('emoji','Emoji','✅');break;
+      case 'pin_message': html+=`<p style="color:var(--muted);font-size:.83rem">Pinnt die auslösende Nachricht (bei Text-Trigger) oder die zuletzt vom Bot gesendete Nachricht.</p>`;break;
+      case 'create_channel':
+        html+=inp('name','Kanal-Name','neuer-kanal')+
+          `<label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Typ</label>
+           <select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.channelType=this.value" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:9px">
+             <option value="text" ${c.channelType!=='voice'&&c.channelType!=='category'?'selected':''}>Text-Kanal</option>
+             <option value="voice" ${c.channelType==='voice'?'selected':''}>Voice-Kanal</option>
+             <option value="category" ${c.channelType==='category'?'selected':''}>Kategorie</option>
+           </select>
+           <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Übergeordnete Kategorie (optional)</label>
+           <select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.categoryId=this.value||undefined" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:9px">
+             <option value="">Keine</option>${chOptions(g,c.categoryId)}
+           </select>`+
+          inp('saveAs','Als Variable speichern (optional)','kanalId');
+        break;
+      case 'delete_channel':
+        html+=`<label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Kanal</label>
+          <select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.channelId=this.value||undefined" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)">
+            <option value="">Aktueller Kanal</option>${chOptions(g,c.channelId)}
+          </select>`;
+        break;
+      case 'open_form': {
+        const fs=c.fields?.length?c.fields:[];
+        html+=`<p style="font-size:.78rem;color:var(--muted);margin-bottom:8px">⚠️ Muss die <b>erste</b> Aktion nach dem Trigger sein (nur bei Slash-Commands, nicht bei Text-Triggern).</p>`+
+          inp('title','Formular-Titel','Formular')+
+          `<div id="cp-form-fields">${fs.map((f,i)=>`<div style="background:var(--bg);border-radius:6px;padding:7px;margin-bottom:5px">
+            <input type="text" value="${(f.label||'').replace(/"/g,'&quot;')}" placeholder="Feldname" class="cp-ff-label" style="width:100%;margin-bottom:4px;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.79rem">
+            <div style="display:flex;gap:4px">
+              <select class="cp-ff-style" style="flex:1;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.78rem"><option value="short" ${f.style==='short'?'selected':''}>Einzeilig</option><option value="long" ${f.style==='long'?'selected':''}>Mehrzeilig</option></select>
+              <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer">✕</button>
+            </div>
+          </div>`).join('')}</div>
+          <button class="btn btn-ghost btn-sm" id="cp-ff-add" style="width:100%;margin-bottom:8px">+ Feld</button>
+          <button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:9px" onclick="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.fields=[...document.querySelectorAll('#cp-form-fields > div')].map(d=>({label:d.querySelector('.cp-ff-label').value,style:d.querySelector('.cp-ff-style').value})).filter(f=>f.label);renderCanvas()">Speichern</button>`;
+        setTimeout(()=>{
+          const btn=document.getElementById('cp-ff-add');
+          if(btn)btn.onclick=()=>{
+            const wrap=document.getElementById('cp-form-fields');
+            const div=document.createElement('div');
+            div.style.cssText='background:var(--bg);border-radius:6px;padding:7px;margin-bottom:5px';
+            div.innerHTML=`<input type="text" placeholder="Feldname" class="cp-ff-label" style="width:100%;margin-bottom:4px;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.79rem"><div style="display:flex;gap:4px"><select class="cp-ff-style" style="flex:1;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.78rem"><option value="short">Einzeilig</option><option value="long">Mehrzeilig</option></select><button style="background:none;border:none;color:var(--red);cursor:pointer">✕</button></div>`;
+            div.querySelector('button').onclick=()=>div.remove();
+            wrap.appendChild(div);
+          };
+        },0);
+        break;
+      }
     }
   }
   panel.innerHTML=html;
