@@ -331,9 +331,11 @@ function renderTicketLogs(logs, names){
     const claimed=t.claimedBy?(names[t.claimedBy]||t.claimedBy):'–';
     const date=t.closedAt?new Date(t.closedAt).toLocaleString('de-DE'):'–';
     const msgs=t.transcript?.length||0;
+    const subject=t.subject||'–';
     return `<tr>
       <td style="color:var(--muted);font-size:.82rem;white-space:nowrap">${date}</td>
       <td>${t.category||'Allgemein'}</td>
+      <td>${subject}</td>
       <td>${user}</td>
       <td style="color:var(--muted)">${claimed}</td>
       <td style="color:var(--muted)">${msgs}</td>
@@ -341,14 +343,15 @@ function renderTicketLogs(logs, names){
         <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-tid="${t.id}" onclick="toggleTranscript(this)">👁</button>
         <button class="btn btn-danger btn-sm" data-gid="${gid}" data-tid="${t.id}" onclick="deleteTicketLog(this)">✕</button>
       </div></td></tr>
-    <tr id="tr-${t.id}" style="display:none"><td colspan="6">
+    <tr id="tr-${t.id}" style="display:none"><td colspan="7">
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:300px;overflow-y:auto;font-size:.82rem;font-family:monospace">
+        ${t.reason?`<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);font-family:'Segoe UI',sans-serif"><span style="color:var(--muted)">Schließgrund:</span> ${t.reason.replace(/</g,'&lt;')}</div>`:''}
         ${(t.transcript||[]).map(m=>`<div style="margin-bottom:4px"><span style="color:var(--accent)">${m.author}</span> <span style="color:var(--muted)">${new Date(m.timestamp).toLocaleTimeString('de-DE')}</span><br>${m.content.replace(/</g,'&lt;')}</div>`).join('')||'(leer)'}
       </div>
     </td></tr>`;
   }).join('');
   el.innerHTML=`<div class="section" style="padding:0;overflow:hidden"><table>
-    <tr><th>Datum</th><th>Kategorie</th><th>User</th><th>Claimed by</th><th>Nachrichten</th><th></th></tr>
+    <tr><th>Datum</th><th>Kategorie</th><th>Betreff</th><th>User</th><th>Claimed by</th><th>Nachrichten</th><th></th></tr>
     ${rows}</table></div>`;
 }
 function toggleTranscript(btn){
