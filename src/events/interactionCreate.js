@@ -12,8 +12,17 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData)
     return interaction.reply({ content: '❌ Ticket-System nicht konfiguriert.', ephemeral: true });
   }
 
-  const existing = Object.entries(guildData.tickets || {}).find(([, t]) => t.userId === interaction.user.id);
-  if (existing) return interaction.reply({ content: `❌ Du hast bereits ein offenes Ticket: <#${existing[0]}>`, ephemeral: true });
+  let existing = Object.entries(guildData.tickets || {}).find(([, t]) => t.userId === interaction.user.id);
+  if (existing) {
+    const stillThere = await interaction.guild.channels.fetch(existing[0]).catch(() => null);
+    if (!stillThere) {
+      // Verwaister Eintrag (Kanal wurde geloescht, DB nicht aktualisiert) - aufraeumen und normal weitermachen
+      delete guildData.tickets[existing[0]];
+      db.set('tickets', guildConfig);
+      existing = null;
+    }
+  }
+  if (existing) return interaction.reply({ content: `\u274c Du hast bereits ein offenes Ticket: <#${existing[0]}>`, ephemeral: true });
 
   await interaction.deferReply({ ephemeral: true });
 
