@@ -195,7 +195,6 @@ async function handleInteraction(interaction) {
     // ── Slash + Context Menu Commands ──────────────────────────────
     if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand() || interaction.isUserContextMenuCommand()) {
       const command = interaction.client.commands.get(interaction.commandName);
-      if (!command) return;
       if (command) {
         try {
           await command.execute(interaction);
@@ -281,8 +280,8 @@ async function handleInteraction(interaction) {
       ticketInfo.claimedBy = interaction.user.id;
       db.set('tickets', guildConfig);
 
-      // Button aktualisieren: Claim-Button deaktivieren und Label ändern
-      const msg = interaction.message;
+      // Button aktualisieren UND Interaktion in EINEM Request bestätigen (statt
+      // erst edit(), dann reply() - das kann zusammen die 3s-Frist reißen)
       const updatedRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId('ticket_claim_btn')
@@ -296,11 +295,8 @@ async function handleInteraction(interaction) {
           .setStyle(ButtonStyle.Danger)
           .setEmoji('🔒'),
       );
-      await msg.edit({ components: [updatedRow] }).catch(() => {});
-
-      await interaction.reply({
-        content: `📋 ${interaction.user} hat dieses Ticket übernommen.`,
-      });
+      await interaction.update({ components: [updatedRow] }).catch(() => {});
+      await interaction.channel.send({ content: `📋 ${interaction.user} hat dieses Ticket übernommen.` }).catch(() => {});
       return;
     }
 
@@ -318,10 +314,10 @@ async function handleInteraction(interaction) {
         .setTitle('Ticket schließen')
         .addComponents(
           new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('subject').setLabel('Betreff / Thema (optional)').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(100)
+            new TextInputBuilder().setCustomId('subject').setLabel('Betreff / Thema').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(100)
           ),
           new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('reason').setLabel('Schließgrund (optional)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)
+            new TextInputBuilder().setCustomId('reason').setLabel('Schließgrund').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)
           ),
         );
       return interaction.showModal(modal);
@@ -339,7 +335,7 @@ async function handleInteraction(interaction) {
       }
 
       await interaction.reply({
-        content: `🔒 Ticket wird in 5 Sekunden geschlossen...${subject ? `\n**Betreff:** ${subject}` : ''}${reason ? `\n**Grund:** ${reason}` : ''}`,
+        content: '🔒 Ticket wird in 5 Sekunden geschlossen...',
       });
 
       // Transcript speichern
