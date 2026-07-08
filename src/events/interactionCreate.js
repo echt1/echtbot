@@ -267,6 +267,10 @@ async function handleInteraction(interaction) {
 
       if (!ticketInfo) return interaction.reply({ content: '❌ Dies ist kein Ticket-Channel.', ephemeral: true });
 
+      if (!interaction.member.roles.cache.has(guildData.supportRoleId)) {
+        return interaction.reply({ content: '❌ Nur Supporter können Tickets übernehmen.', ephemeral: true });
+      }
+
       if (ticketInfo.claimedBy) {
         return interaction.reply({
           content: `❌ Dieses Ticket ist bereits von <@${ticketInfo.claimedBy}> übernommen.`,
@@ -300,14 +304,43 @@ async function handleInteraction(interaction) {
       return;
     }
 
-    // ── Ticket schließen ────────────────────────────────────────────
+    // ── Ticket schließen: Button -> öffnet Formular für Betreff/Grund ──
     if (interaction.isButton() && interaction.customId === 'ticket_close_btn') {
+      const guildData = db.get('tickets')[interaction.guild.id];
+      if (!guildData?.tickets?.[interaction.channel.id]) {
+        return interaction.reply({ content: '❌ Dies ist kein Ticket-Channel.', ephemeral: true });
+      }
+      if (!interaction.member.roles.cache.has(guildData.supportRoleId)) {
+        return interaction.reply({ content: '❌ Nur Supporter können Tickets schließen.', ephemeral: true });
+      }
+      const modal = new ModalBuilder()
+        .setCustomId('ticket_close_modal')
+        .setTitle('Ticket schließen')
+        .addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('subject').setLabel('Betreff / Thema (optional)').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(100)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('reason').setLabel('Schließgrund (optional)').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)
+          ),
+        );
+      return interaction.showModal(modal);
+    }
+
+    // ── Ticket schließen: Formular-Submit -> schließt wirklich ─────────
+    if (interaction.isModalSubmit() && interaction.customId === 'ticket_close_modal') {
+      const subject = interaction.fields.getTextInputValue('subject') || null;
+      const reason  = interaction.fields.getTextInputValue('reason') || null;
+
       const guildConfig = db.get('tickets');
       const guildData   = guildConfig[interaction.guild.id];
       if (!guildData?.tickets?.[interaction.channel.id]) {
         return interaction.reply({ content: '❌ Dies ist kein Ticket-Channel.', ephemeral: true });
       }
-      await interaction.reply({ content: '🔒 Ticket wird in 5 Sekunden geschlossen...' });
+
+      await interaction.reply({
+        content: `🔒 Ticket wird in 5 Sekunden geschlossen...${subject ? `\n**Betreff:** ${subject}` : ''}${reason ? `\n**Grund:** ${reason}` : ''}`,
+      });
 
       // Transcript speichern
       try {
@@ -327,6 +360,8 @@ async function handleInteraction(interaction) {
           openedAt: guildData.tickets[interaction.channel.id]?.openedAt,
           closedAt: Date.now(),
           closedBy: interaction.user.id,
+          subject,
+          reason,
           transcript,
         });
         // Älter als 30 Tage entfernen
@@ -341,4 +376,5 @@ async function handleInteraction(interaction) {
       db.set('tickets', guildConfig);
       setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
     }
-}
+  },
+};
