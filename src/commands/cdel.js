@@ -4,11 +4,11 @@ function parseTime(input) {
   // Format: "30m", "2h", "1d", "14:30", "24.12.2025 14:30"
   input = input.trim();
 
-  // Relative: 30m / 2h / 1d
-  const rel = /^(\d+)(m|h|d)$/i.exec(input);
+  // Relative: 45s / 30m / 2h / 1d
+  const rel = /^(\d+)(s|m|h|d)$/i.exec(input);
   if (rel) {
     const n = parseInt(rel[1]);
-    const unit = { m: 60_000, h: 3_600_000, d: 86_400_000 }[rel[2].toLowerCase()];
+    const unit = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[rel[2].toLowerCase()];
     return Date.now() + n * unit;
   }
 
@@ -37,7 +37,7 @@ module.exports = {
     .setName('cdel')
     .setDescription('Löscht diesen Channel automatisch nach einer Zeit oder zu einem bestimmten Zeitpunkt')
     .addStringOption(opt =>
-      opt.setName('zeit').setDescription('z.B. 30m, 2h, 1d, 14:30, oder "24.12.2025 14:30"').setRequired(true)
+      opt.setName('zeit').setDescription('z.B. 45s, 30m, 2h, 1d, 14:30, oder "24.12.2025 14:30"').setRequired(true)
     )
     .addBooleanOption(opt =>
       opt.setName('anzeigen').setDescription('Countdown-Nachricht für alle posten? (Standard: ja)').setRequired(false)
@@ -54,7 +54,7 @@ module.exports = {
     }
 
     const ms = targetTime - Date.now();
-    if (ms < 10_000) return interaction.reply({ content: '❌ Zeitpunkt muss in der Zukunft liegen (mind. 10 Sekunden).', ephemeral: true });
+    if (ms < 0_000) return interaction.reply({ content: '❌ Zeitpunkt muss in der Zukunft liegen (mind. 0 Sekunden).', ephemeral: true });
     if (ms > 24 * 3_600_000) return interaction.reply({ content: '❌ Maximal 24 Stunden im Voraus möglich.', ephemeral: true });
 
     const ts = Math.floor(targetTime / 1000);
