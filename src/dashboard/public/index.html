@@ -310,8 +310,10 @@ function roleOptions(gid,sel=''){return(roleCache[gid]||[]).map(r=>`<option valu
 function fmt(s){const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
 // ── Ticket-Log ───────────────────────────────────────────────────────
 let _tlData = null;
+let _tlGid = null;
 async function loadTicketLog(){
   const gid=firstGuild();if(!gid)return;
+  _tlGid = gid;
   try{
     const r=await api(`/api/ticketlogs/${gid}`);
     _tlData=r;
@@ -319,6 +321,7 @@ async function loadTicketLog(){
   }catch(e){document.getElementById('ticketlog-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
 }
 function renderTicketLogs(logs, names){
+  const gid = _tlGid;
   const el=document.getElementById('ticketlog-content');
   document.getElementById('tl-count').textContent=`${logs.length} Einträge`;
   if(!logs.length){el.innerHTML='<div class="empty">Keine Ticket-Logs vorhanden.</div>';return;}
