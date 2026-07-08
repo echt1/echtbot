@@ -376,5 +376,4 @@ async function handleInteraction(interaction) {
       db.set('tickets', guildConfig);
       setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
     }
-  },
-};
+  }
