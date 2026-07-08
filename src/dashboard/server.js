@@ -385,9 +385,21 @@ function startDashboard(client) {
       })),
     };
     try {
-      const result = cmd.discordCmdId
-        ? await rest.patch(Routes.applicationGuildCommand(process.env.CLIENT_ID, guildId, cmd.discordCmdId), { body })
-        : await rest.post(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body });
+      if (cmd.discordCmdId) {
+        try {
+          const result = await rest.patch(Routes.applicationGuildCommand(process.env.CLIENT_ID, guildId, cmd.discordCmdId), { body });
+          return result.id;
+        } catch (err) {
+          // Gespeicherte discordCmdId existiert bei Discord nicht mehr -> als neuen Command anlegen
+          if (err.code === 10063 || err.status === 404) {
+            console.warn('[CustomCmd] discordCmdId veraltet, lege Command neu an:', name);
+            const result = await rest.post(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body });
+            return result.id;
+          }
+          throw err;
+        }
+      }
+      const result = await rest.post(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body });
       return result.id;
     } catch (err) {
       console.error('[CustomCmd] Discord API error:', err.message);
