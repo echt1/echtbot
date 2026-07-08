@@ -172,6 +172,19 @@ function startDashboard(client) {
     res.json({ ok: true, categories: tickets[gid].categories });
   });
 
+  app.post('/api/tickets/:gid/categories/reorder', auth, (req, res) => {
+    const { order } = req.body;
+    const tickets = db.get('tickets');
+    const gid = req.params.gid;
+    if (!tickets[gid] || !Array.isArray(order)) return res.json({ ok: true });
+    const map = Object.fromEntries((tickets[gid].categories || []).map(c => [c.prefix, c]));
+    const reordered = order.map(p => map[p]).filter(Boolean);
+    for (const c of tickets[gid].categories || []) if (!reordered.includes(c)) reordered.push(c);
+    tickets[gid].categories = reordered;
+    db.set('tickets', tickets);
+    res.json({ ok: true, categories: tickets[gid].categories });
+  });
+
   // ── Social ─────────────────────────────────────────────────────────
   app.get('/api/social', auth, (req, res) => res.json(db.get('social')));
   app.post('/api/social/:gid', auth, (req, res) => {
@@ -372,6 +385,10 @@ function startDashboard(client) {
 
   async function registerCustomSlashCmd(guildId, cmd) {
     if (!process.env.CLIENT_ID) return null;
+    if (!guildId || guildId === 'null' || guildId === 'undefined' || !client.guilds.cache.has(guildId)) {
+      console.warn('[CustomCmd] Ungueltige guildId beim Registrieren, uebersprungen:', guildId);
+      return null;
+    }
     const rest = new REST().setToken(process.env.DISCORD_TOKEN);
     const name = cmd.name.toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 32) || 'cmd';
     const body = {
