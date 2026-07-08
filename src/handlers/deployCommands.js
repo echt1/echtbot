@@ -2,13 +2,17 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { REST, Routes } = require('discord.js');
+const db = require('../utils/database');
 
 const commandsPath = path.join(__dirname, '..', 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
 
 const commands = [];
 for (const file of commandFiles) {
-  const command = require(path.join(commandsPath, file));const db = require('../utils/database');
+  const command = require(path.join(commandsPath, file));
+  if (command.data) commands.push(command.data.toJSON());
+}
+
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
@@ -17,7 +21,7 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
 
     if (process.env.GUILD_ID) {
       // Custom Commands aus dem Dashboard einsammeln, damit der Bulk-Overwrite
-      // sie NICHT loescht (Discord ersetzt bei PUT die komplette Command-Liste!)
+      // sie NICHT löscht (Discord ersetzt bei PUT die komplette Command-Liste!)
       const customStore  = db.get('customcommands') || {};
       const guildCustom  = (customStore[process.env.GUILD_ID] || []).filter(c => c.type === 'slash');
       const customBodies = guildCustom.map(c => ({
@@ -31,6 +35,7 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
         })),
       }));
 
+      // Sofort sichtbar, nur in diesem Server - empfohlen für Entwicklung
       const result = await rest.put(
         Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
         { body: [...commands, ...customBodies] }
@@ -46,7 +51,7 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
         db.set('customcommands', customStore);
       }
 
-      console.log(`Commands fuer Guild ${process.env.GUILD_ID} registriert (inkl. ${customBodies.length} Custom Command(s)).`);
+      console.log(`Commands für Guild ${process.env.GUILD_ID} registriert (inkl. ${customBodies.length} Custom Command(s)).`);
     } else {
       // Global - dauert bis zu 1h bis Discord sie überall ausrollt
       await rest.put(
