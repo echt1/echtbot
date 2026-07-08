@@ -54,7 +54,7 @@ module.exports = {
     }
 
     const ms = targetTime - Date.now();
-    if (ms < 0_000) return interaction.reply({ content: '❌ Zeitpunkt muss in der Zukunft liegen (mind. 0 Sekunden).', ephemeral: true });
+    if (ms < 1_000) return interaction.reply({ content: '❌ Zeitpunkt muss in der Zukunft liegen (min. 1 Sekunden).', ephemeral: true });
     if (ms > 24 * 3_600_000) return interaction.reply({ content: '❌ Maximal 24 Stunden im Voraus möglich.', ephemeral: true });
 
     const ts = Math.floor(targetTime / 1000);
