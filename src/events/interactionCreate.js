@@ -62,6 +62,19 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData)
 module.exports = {
   name: 'interactionCreate',
   async execute(interaction) {
+    try {
+      return await handleInteraction(interaction);
+    } catch (err) {
+      console.error('[interactionCreate] Unerwarteter Fehler:', err);
+      const msg = { content: '❌ Es ist ein unerwarteter Fehler aufgetreten.', ephemeral: true };
+      if (interaction.isRepliable?.()) {
+        (interaction.replied || interaction.deferred ? interaction.followUp(msg) : interaction.reply(msg)).catch(() => {});
+      }
+    }
+  },
+};
+
+async function handleInteraction(interaction) {
 
     // ── Custom Commands: Buttons / Selects / Modals ─────────────────────
     if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith('cc|')) {
@@ -201,17 +214,16 @@ module.exports = {
           .setCustomId(`ticket_modal_${prefix}`)
           .setTitle(category.label.slice(0, 45))
           .addComponents(
-            ...fields.map((field, i) =>
-              new ActionRowBuilder().addComponents(
-                new TextInputBuilder()
-                  .setCustomId(`field_${i}`)
-                  .setLabel(field.label.slice(0, 45))
-                  .setStyle(field.style === 'long' ? TextInputStyle.Paragraph : TextInputStyle.Short)
-                  .setRequired(field.required !== false)
-                  .setPlaceholder((field.placeholder || '').slice(0, 100) || undefined)
-                  .setMaxLength(field.style === 'long' ? 1000 : 200)
-              )
-            )
+            ...fields.map((field, i) => {
+              const input = new TextInputBuilder()
+                .setCustomId(`field_${i}`)
+                .setLabel(field.label.slice(0, 45))
+                .setStyle(field.style === 'long' ? TextInputStyle.Paragraph : TextInputStyle.Short)
+                .setRequired(field.required !== false)
+                .setMaxLength(field.style === 'long' ? 1000 : 200);
+              if (field.placeholder) input.setPlaceholder(field.placeholder.slice(0, 100));
+              return new ActionRowBuilder().addComponents(input);
+            })
           );
         return interaction.showModal(modal);
       }
@@ -290,7 +302,7 @@ module.exports = {
 
       // Transcript speichern
       try {
-        const msgs = await interaction.channel.messages.fetch({ limit: 200 });
+        const msgs = await interaction.channel.messages.fetch({ limit: 100 });
         const transcript = [...msgs.values()].reverse().map(m => ({
           author: m.author.tag, authorId: m.author.id,
           content: m.content || (m.embeds[0]?.title ? `[Embed: ${m.embeds[0].title}]` : '[Kein Text]'),
@@ -320,5 +332,4 @@ module.exports = {
       db.set('tickets', guildConfig);
       setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
     }
-  },
-};
+}
