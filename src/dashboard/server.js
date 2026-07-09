@@ -268,7 +268,35 @@ function startDashboard(client) {
     res.json({ ok: true });
   });
 
-  // ── Embed Fetch ──────────────────────────────────────────────────────
+  // ── Embed Fetch (Kanal automatisch finden) ──────────────────────────
+  app.get('/api/embed/find/:gid/:messageId', auth, async (req, res) => {
+    const { gid, messageId } = req.params;
+    const g = client.guilds.cache.get(gid);
+    if (!g) return res.status(404).json({ error: 'Guild nicht gefunden' });
+    const channels = [...g.channels.cache.filter(c => c.type === ChannelType.GuildText).values()];
+    try {
+      const results = await Promise.allSettled(
+        channels.map(async ch => ({ ch, msg: await ch.messages.fetch(messageId) }))
+      );
+      const hit = results.find(r => r.status === 'fulfilled');
+      if (!hit) return res.status(404).json({ error: 'Nachricht in keinem Textkanal gefunden' });
+      const { ch, msg } = hit.value;
+      const embed = msg.embeds[0];
+      res.json({
+        channelId: ch.id,
+        content: msg.content || '',
+        title: embed?.title || '',
+        description: embed?.description || '',
+        color: embed?.color ? '#' + embed.color.toString(16).padStart(6,'0') : '#5865f2',
+        imageUrl: embed?.image?.url || '',
+        thumbnailUrl: embed?.thumbnail?.url || '',
+        footer: embed?.footer?.text || '',
+        timestamp: !!embed?.timestamp,
+      });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Embed Fetch (Kanal bereits bekannt) ─────────────────────────────
   app.get('/api/embed/fetch', auth, async (req, res) => {
     const { channelId, messageId } = req.query;
     if (!channelId || !messageId) return res.status(400).json({ error: 'channelId und messageId benötigt' });
