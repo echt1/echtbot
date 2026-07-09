@@ -721,10 +721,13 @@ function updatePreview(){
 }
 async function prefillFromMessage(){
   const msgId=(document.getElementById('emb-msgid')?.value||'').trim();
-  const chId=document.getElementById('emb-channel')?.value;
-  if(!msgId||!chId)return;
-  const r=await api(`/api/embed/fetch?channelId=${chId}&messageId=${msgId}`).catch(()=>null);
-  if(!r||r.error)return;
+  if(!msgId)return;
+  const gid=firstGuild();if(!gid)return;
+  flash('emb-msg','🔍 Suche Nachricht...');
+  const r=await api(`/api/embed/find/${gid}/${msgId}`).catch(()=>null);
+  if(!r||r.error){flash('emb-msg','❌ Nachricht nicht gefunden.');return;}
+  const chSel=document.getElementById('emb-channel');
+  if(chSel&&r.channelId)chSel.value=r.channelId;
   const set=(id,val)=>{const e=document.getElementById(id);if(e)e.value=val||'';};
   set('emb-content',r.content);set('emb-title',r.title);set('emb-desc',r.description);
   set('emb-img',r.imageUrl);set('emb-thumb',r.thumbnailUrl);set('emb-footer',r.footer);
