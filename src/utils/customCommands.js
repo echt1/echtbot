@@ -443,14 +443,9 @@ async function handleSlashCommand(interaction) {
   if (!interaction.guild) return;
   const store = db.get('customcommands') || {};
   const all = store[interaction.guild.id] || [];
-  console.log(`[CC-Debug] /${interaction.commandName} ausgelöst | ${all.length} Custom Command(s) für diese Guild gespeichert:`,
-    all.map(c => ({ name: c.name, type: c.type, enabled: c.enabled })));
   const cmd = all.find(c => c.type === 'slash' && c.enabled !== false &&
     (c.name || '').toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 32) === interaction.commandName);
-  console.log(`[CC-Debug] Treffer:`, cmd ? cmd.name : 'KEIN MATCH GEFUNDEN');
   if (!cmd) return;
-  console.log(`[CC-Debug] Nodes im Command:`, cmd.nodes?.map(n => ({ id: n.id, kind: n.kind, type: n.type })));
-  console.log(`[CC-Debug] Edges im Command:`, cmd.edges);
 
   if (!checkCooldown(cmd, interaction.user.id)) {
     return interaction.reply({ content: '⏳ Bitte warte, bevor du diesen Command erneut benutzt.', ephemeral: true }).catch(() => {});
