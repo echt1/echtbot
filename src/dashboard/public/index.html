@@ -1101,6 +1101,8 @@ const BLOCK_DEFS = {
 function isCondition(t){ return t?.startsWith('condition_'); }
 function getDef(t){ return [...BLOCK_DEFS.actions,...BLOCK_DEFS.conditions,...BLOCK_DEFS.options].find(d=>d.type===t); }
 function uuid(){ return Math.random().toString(36).slice(2,10); }
+const BRANCH_COLORS=['#f1c40f','#e67e22','#9b59b6','#1abc9c','#e91e63','#3498db','#2ecc71','#e74c3c','#f39c12','#8e44ad'];
+function branchColor(i){ return BRANCH_COLORS[i%BRANCH_COLORS.length]; }
 
 async function loadCC(){
   CC.gid=firstGuild(); if(!CC.gid)return;
@@ -1249,6 +1251,19 @@ function getPortPos(node,port){
 
 function bz(x1,y1,x2,y2){const d=Math.max(Math.abs(y2-y1)*0.5,50);return`M${x1} ${y1} C${x1} ${y1+d} ${x2} ${y2-d} ${x2} ${y2}`;}
 
+function getPortPosDOM(nodeId,port){
+  const node=CC.cmd.nodes.find(n=>n.id===nodeId);
+  if(!node)return{x:0,y:0};
+  const portEl=document.querySelector(`.ccport[data-nid="${nodeId}"][data-port="${port}"]`);
+  const nodeEl=document.getElementById('ccn_'+nodeId);
+  if(!portEl||!nodeEl)return getPortPos(node,port);
+  const nr=nodeEl.getBoundingClientRect(),pr=portEl.getBoundingClientRect();
+  return{
+    x:node.x+(pr.left+pr.width/2-nr.left)/CC.zoom,
+    y:node.y+(pr.top+pr.height/2-nr.top)/CC.zoom,
+  };
+}
+
 function renderCanvas(){
   const nodesEl=document.getElementById('cc-nodes');
   const edgesEl=document.getElementById('cc-edges');
@@ -1263,8 +1278,8 @@ function renderCanvas(){
     const fn=CC.cmd.nodes.find(n=>n.id===e.fromNodeId);
     const tn=CC.cmd.nodes.find(n=>n.id===e.toNodeId);
     if(!fn||!tn)return'';
-    const fp=getPortPos(fn,e.fromPort),tp=getPortPos(tn,'in');
-    const col={out:'#5865f2',then:'#3ba55c',else:'#ed4245'}[e.fromPort]||(e.fromPort?.startsWith('btn_')?'#f1c40f':e.fromPort?.startsWith('sel_')?'#e67e22':'#5865f2');
+    const fp=getPortPosDOM(fn.id,e.fromPort),tp=getPortPosDOM(tn.id,'in');
+    const col={out:'#5865f2',then:'#3ba55c',else:'#ed4245'}[e.fromPort]||(e.fromPort?.startsWith('btn_')||e.fromPort?.startsWith('sel_')?branchColor(parseInt(e.fromPort.split('_')[1])):'#5865f2');
     return`<path d="${bz(fp.x,fp.y,tp.x,tp.y)}" fill="none" stroke="${col}" stroke-width="2" style="cursor:pointer" onclick="if(confirm('Verbindung löschen?')){CC.cmd.edges=CC.cmd.edges.filter(x=>x.id!=='${e.id}');renderCanvas()}"/>`;
   }).join('');
 }
@@ -1282,12 +1297,12 @@ function renderCCNode(node){
           <div class="ccport port-else" style="left:70%;transform:translateX(-50%)" data-nid="${node.id}" data-port="else" onmousedown="ccPMD(event,'${node.id}','else')"></div>`;
   } else {
     outP=`<div class="ccport port-out" style="left:50%;transform:translateX(-50%)" data-nid="${node.id}" data-port="out" onmousedown="ccPMD(event,'${node.id}','out')"></div>`;
-    (node.buttons||[]).forEach((b,i)=>{const p=node.buttons.length>1?20+i*(60/(node.buttons.length-1)):50;outP+=`<div class="ccport port-btn" style="left:${p}%;transform:translateX(-50%)" title="Btn: ${b.label||i}" data-nid="${node.id}" data-port="btn_${i}" onmousedown="ccPMD(event,'${node.id}','btn_${i}')"></div>`;});
-    (node.selects||[]).forEach((s,i)=>{const p=node.selects.length>1?15+i*(70/(node.selects.length-1)):50;outP+=`<div class="ccport port-sel" style="left:${p}%;transform:translateX(-50%)" title="Sel: ${s.label||i}" data-nid="${node.id}" data-port="sel_${i}" onmousedown="ccPMD(event,'${node.id}','sel_${i}')"></div>`;});
+    (node.buttons||[]).forEach((b,i)=>{const p=node.buttons.length>1?20+i*(60/(node.buttons.length-1)):50;const col=branchColor(i);outP+=`<div class="ccport port-btn" style="left:${p}%;transform:translateX(-50%);background:${col}" title="Btn: ${b.label||i}" data-nid="${node.id}" data-port="btn_${i}" onmousedown="ccPMD(event,'${node.id}','btn_${i}')"></div>`;});
+    (node.selects||[]).forEach((s,i)=>{const p=node.selects.length>1?15+i*(70/(node.selects.length-1)):50;const col=branchColor(i);outP+=`<div class="ccport port-sel" style="left:${p}%;transform:translateX(-50%);background:${col}" title="Sel: ${s.label||i}" data-nid="${node.id}" data-port="sel_${i}" onmousedown="ccPMD(event,'${node.id}','sel_${i}')"></div>`;});
   }
   const branchLegend=(node.buttons?.length||node.selects?.length)?`<div style="display:flex;flex-direction:column;gap:2px;padding:0 8px 6px;font-size:.68rem">
-    ${(node.buttons||[]).map((b,i)=>`<div style="display:flex;align-items:center;gap:5px;color:#f1c40f"><span style="width:6px;height:6px;border-radius:50%;background:#f1c40f;flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔘 ${(b.label||'Button '+(i+1))}</span></div>`).join('')}
-    ${(node.selects||[]).map((s,i)=>`<div style="display:flex;align-items:center;gap:5px;color:#e67e22"><span style="width:6px;height:6px;border-radius:50%;background:#e67e22;flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔽 ${(s.label||'Option '+(i+1))}</span></div>`).join('')}
+    ${(node.buttons||[]).map((b,i)=>{const col=branchColor(i);return`<div style="display:flex;align-items:center;gap:5px;color:${col}"><span style="width:6px;height:6px;border-radius:50%;background:${col};flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔘 ${(b.label||'Button '+(i+1))}</span></div>`;}).join('')}
+    ${(node.selects||[]).map((s,i)=>{const col=branchColor(i);return`<div style="display:flex;align-items:center;gap:5px;color:${col}"><span style="width:6px;height:6px;border-radius:50%;background:${col};flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔽 ${(s.label||'Option '+(i+1))}</span></div>`;}).join('')}
   </div>`:'';
 
   const label=isTr?(node.type==='slash'?`/${CC.cmd.name||'cmd'}`:node.type==='text'?`💬 "${CC.cmd.name||'trigger'}"`:def.label):def.label;
@@ -1351,7 +1366,7 @@ function ccNMD(e,id){
 function ccPMD(e,nodeId,port){
   e.stopPropagation();if(port==='in')return;
   const n=CC.cmd.nodes.find(n=>n.id===nodeId);if(!n)return;
-  const p=getPortPos(n,port);CC.connecting={fromNodeId:nodeId,fromPort:port,x:p.x,y:p.y};
+  const p=getPortPosDOM(nodeId,port);CC.connecting={fromNodeId:nodeId,fromPort:port,x:p.x,y:p.y};
 }
 function ccWheel(e){
   e.preventDefault();const wrap=document.getElementById('cc-canvas-wrap');const rect=wrap.getBoundingClientRect();
