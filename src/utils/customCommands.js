@@ -1,24 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════
 // CUSTOM COMMANDS – AUSFÜHRUNGS-ENGINE (Backend)
 // ═══════════════════════════════════════════════════════════════════════
-// Diese Datei führt die im Dashboard (Custom Commands -> Node-Editor)
-// gebauten Command-Graphen (nodes/edges) tatsächlich aus.
-//
-// Wird aufgerufen aus:
-//   - src/events/interactionCreate.js  -> handleSlashCommand(interaction)
-//   - src/events/messageCreate.js      -> handleTextTrigger(message)
-//   - src/events/interactionCreate.js  -> handleComponentInteraction(interaction)  [NEU einbinden]
-//   - src/events/interactionCreate.js  -> handleModalInteraction(interaction)      [NEU einbinden]
-//
-// Datenformat (kommt 1:1 aus dem Dashboard-Editor, unverändert):
-//   cmd = {
-//     id, name, description, type: 'slash'|'text', textTriggerMode,
-//     options: [{ id, name, type, description, required }],
-//     cooldown, enabled,
-//     nodes: [{ id, kind:'trigger'|'action'|'condition', type, config:{}, buttons:[], selects:[] }],
-//     edges: [{ id, fromNodeId, fromPort, toNodeId }]   // fromPort: out|then|else|btn_N|sel_N
-//   }
-// ═══════════════════════════════════════════════════════════════════════
 
 const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
@@ -28,9 +10,7 @@ const {
 const db = require('./database');
 
 // ── In-Memory State ───────────────────────────────────────────────────
-// Cooldowns: "cmdId-userId" -> timestamp
 const cooldowns = new Map();
-// Laufende Ausführungen, die auf Button/Select/Modal warten: execId -> { cmd, node, ctxData, expires }
 const pending = new Map();
 setInterval(() => {
   const now = Date.now();
@@ -52,10 +32,38 @@ function setGlobalVar(guildId, name, value) {
   store[guildId][name] = value;
   db.set('ccvars', store);
 }
+function deleteGlobalVar(guildId, name) {
+  const store = db.get('ccvars') || {};
+  if (store[guildId]) delete store[guildId][name];
+  db.set('ccvars', store);
+}
 
 // ── Platzhalter ersetzen ───────────────────────────────────────────────
+// Wird auf ALLE Text- UND ID-Felder angewendet (Rolle/Kanal/User-IDs
+// koennen jetzt entweder eine echte Discord-ID ODER {var:x}/{input:x} sein -
+// ph() laesst normale IDs unveraendert und ersetzt nur erkannte Platzhalter).
 function ph(str, ctx) {
-  if (!str) return str;
+  if (str === undefined || str === null) return str;
+  return String(str)
+    .replace(/\{user\}/g, ctx.member ? `${ctx.member}` : `<@${ctx.user.id}>`)
+    .replace(/\{username\}/g, ctx.user.username)
+    .replace(/\{server\}/g, ctx.guild?.name || '')
+    .replace(/\{channel\}/g, ctx.channel ? `${ctx.channel}` : '')
+    .replace(/\{date\}/g, new Date().toLocaleDateString('de-DE'))
+    .replace(/\{input:([a-zA-Z0-9_]+)\}/g, (_, name) => {
+      const v = ctx.options[name];
+      if (v === undefined || v === null) return '';
+      return v.id ? v.id : String(v); // Discord-Objekte (User/Channel/Role) -> rohe ID fuer ID-Felder
+    })
+    .replace(/\{var:([a-zA-Z0-9_]+)\}/g, (_, name) => {
+      if (ctx.vars[name] !== undefined) return String(ctx.vars[name]);
+      const g = getGlobalVar(ctx.guild.id, name);
+      return g === undefined ? '' : String(g);
+    });
+}
+// Variante fuer Anzeige-Text (User/Channel-Objekte als Mention statt roher ID)
+function phText(str, ctx) {
+  if (str === undefined || str === null) return str;
   return String(str)
     .replace(/\{user\}/g, ctx.member ? `${ctx.member}` : `<@${ctx.user.id}>`)
     .replace(/\{username\}/g, ctx.user.username)
@@ -81,7 +89,7 @@ async function resolveTargetMember(config, ctx) {
   if (config.targetInput) {
     const val = ctx.options[config.targetInput];
     if (val) {
-      const id = val.id || val; // GuildMember/User haben .id
+      const id = val.id || val;
       return await ctx.guild.members.fetch(id).catch(() => null);
     }
   }
@@ -130,22 +138,20 @@ function registerPending(cmd, node, ctx) {
       userId: ctx.user.id, channelId: ctx.channel.id,
       options: ctx.options, vars: ctx.vars,
     },
-    expires: Date.now() + 15 * 60_000, // 15 Min gültig
+    expires: Date.now() + 15 * 60_000,
   });
   return execId;
 }
 
-// ── Embed bauen ─────────────────────────────────────────────────────────
 function buildEmbed(embedCfg, ctx) {
   if (!embedCfg) return null;
   const embed = new EmbedBuilder();
-  let has = false;
-  if (embedCfg.title) { embed.setTitle(ph(embedCfg.title, ctx).slice(0, 256)); has = true; }
-  if (embedCfg.description) { embed.setDescription(ph(embedCfg.description, ctx).replace(/\\n/g, '\n').slice(0, 4096)); has = true; }
-  if (embedCfg.footer) { embed.setFooter({ text: ph(embedCfg.footer, ctx).slice(0, 2048) }); has = true; }
+  if (embedCfg.title) embed.setTitle(phText(embedCfg.title, ctx).slice(0, 256));
+  if (embedCfg.description) embed.setDescription(phText(embedCfg.description, ctx).replace(/\\n/g, '\n').slice(0, 4096));
+  if (embedCfg.footer) embed.setFooter({ text: phText(embedCfg.footer, ctx).slice(0, 2048) });
   embed.setColor(parseInt((embedCfg.color || '#5865F2').replace('#', ''), 16) || 0x5865f2);
   if (embedCfg.timestamp) embed.setTimestamp();
-  return has || embedCfg.timestamp ? embed : embed; // auch leeres Embed erlauben (Farbe reicht manchmal)
+  return embed;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -156,8 +162,9 @@ async function evalCondition(node, ctx) {
   const t = node.type.replace('condition_', '');
   switch (t) {
     case 'role': {
-      if (!c.roleId || !ctx.member) return false;
-      const has = ctx.member.roles.cache.has(c.roleId);
+      const roleId = ph(c.roleId, ctx);
+      if (!roleId || !ctx.member) return false;
+      const has = ctx.member.roles.cache.has(roleId);
       return c.mode === 'hasnt' ? !has : has;
     }
     case 'channel':
@@ -167,8 +174,8 @@ async function evalCondition(node, ctx) {
     case 'chance':
       return Math.random() * 100 < (Number(c.percent) || 50);
     case 'compare': {
-      const a = ph(c.valueA, ctx) ?? '';
-      const b = ph(c.valueB, ctx) ?? '';
+      const a = phText(c.valueA, ctx) ?? '';
+      const b = phText(c.valueB, ctx) ?? '';
       const na = Number(a), nb = Number(b);
       const numeric = !isNaN(na) && !isNaN(nb) && a.trim() !== '' && b.trim() !== '';
       switch (c.operator) {
@@ -183,7 +190,7 @@ async function evalCondition(node, ctx) {
       }
     }
     case 'user':
-      return ctx.user.id === c.userId;
+      return ctx.user.id === ph(c.userId, ctx);
     default:
       return false;
   }
@@ -198,80 +205,103 @@ async function runAction(node, ctx) {
     switch (node.type) {
 
       case 'reply_text': {
-        const content = ph(c.content, ctx) || '\u200b';
+        const content = phText(c.content, ctx) || '\u200b';
         const components = needsPause(node) ? buildComponents(node, ctx.__execIdFor(node)) : [];
-        const payload = { content, ephemeral: !!c.ephemeral, components };
-        ctx.lastMessage = await sendReply(ctx, payload);
+        ctx.lastMessage = await sendReply(ctx, { content, ephemeral: !!c.ephemeral, components });
         break;
       }
 
       case 'reply_embed': {
         const embed = buildEmbed(c.embed, ctx);
         const components = needsPause(node) ? buildComponents(node, ctx.__execIdFor(node)) : [];
-        const payload = { content: c.content ? ph(c.content, ctx) : undefined, embeds: [embed], ephemeral: !!c.ephemeral, components };
-        ctx.lastMessage = await sendReply(ctx, payload);
+        ctx.lastMessage = await sendReply(ctx, { content: c.content ? phText(c.content, ctx) : undefined, embeds: [embed], ephemeral: !!c.ephemeral, components });
         break;
       }
 
       case 'random_response': {
         const list = c.responses?.length ? c.responses : ['...'];
-        const content = ph(list[Math.floor(Math.random() * list.length)], ctx);
+        const content = phText(list[Math.floor(Math.random() * list.length)], ctx);
         ctx.lastMessage = await sendReply(ctx, { content, ephemeral: !!c.ephemeral });
         break;
       }
 
       case 'send_message': {
-        const target = c.channelId ? await ctx.guild.channels.fetch(c.channelId).catch(() => null) : ctx.channel;
+        const channelId = ph(c.channelId, ctx);
+        const target = channelId ? await ctx.guild.channels.fetch(channelId).catch(() => null) : ctx.channel;
         if (!target) break;
         const embed = c.embed ? buildEmbed(c.embed, ctx) : null;
         const components = needsPause(node) ? buildComponents(node, ctx.__execIdFor(node)) : [];
         ctx.lastMessage = await target.send({
-          content: c.content ? ph(c.content, ctx) : undefined,
+          content: c.content ? phText(c.content, ctx) : undefined,
           embeds: embed ? [embed] : [],
           components,
         });
         break;
       }
 
+      case 'edit_message': {
+        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
+        const messageId = ph(c.messageId, ctx);
+        if (!messageId) break;
+        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
+        if (!target) break;
+        const msg = await target.messages.fetch(messageId).catch(() => null);
+        if (!msg) break;
+        const embed = c.embed ? buildEmbed(c.embed, ctx) : null;
+        const payload = {};
+        if (c.content) payload.content = phText(c.content, ctx);
+        if (embed) payload.embeds = [embed];
+        await msg.edit(payload).catch(() => {});
+        break;
+      }
+
       case 'dm': {
         const member = await resolveTargetMember(c, ctx);
         if (!member) break;
-        await member.send({ content: ph(c.content, ctx) || '\u200b' }).catch(() => {});
+        await member.send({ content: phText(c.content, ctx) || '\u200b' }).catch(() => {});
         break;
       }
 
       case 'add_role':
       case 'remove_role': {
-        if (!c.roleId) break;
+        const roleId = ph(c.roleId, ctx);
+        if (!roleId) break;
         const member = await resolveTargetMember(c, ctx);
         if (!member) break;
-        if (node.type === 'add_role') await member.roles.add(c.roleId).catch(() => {});
-        else await member.roles.remove(c.roleId).catch(() => {});
+        if (node.type === 'add_role') await member.roles.add(roleId).catch(() => {});
+        else await member.roles.remove(roleId).catch(() => {});
         break;
       }
 
       case 'kick': {
         const member = await resolveTargetMember(c, ctx);
-        if (member?.kickable) await member.kick(ph(c.reason, ctx) || 'Custom Command').catch(() => {});
+        if (member?.kickable) await member.kick(phText(c.reason, ctx) || 'Custom Command').catch(() => {});
         break;
       }
 
       case 'ban': {
         const member = await resolveTargetMember(c, ctx);
-        if (member?.bannable) await member.ban({ reason: ph(c.reason, ctx) || 'Custom Command' }).catch(() => {});
+        if (member?.bannable) await member.ban({ reason: phText(c.reason, ctx) || 'Custom Command' }).catch(() => {});
+        break;
+      }
+
+      case 'unban': {
+        const userId = ph(c.userId, ctx);
+        if (!userId) break;
+        await ctx.guild.bans.remove(userId, phText(c.reason, ctx) || 'Custom Command').catch(() => {});
         break;
       }
 
       case 'timeout': {
         const member = await resolveTargetMember(c, ctx);
         const ms = (Number(c.durationMinutes) || 10) * 60_000;
-        if (member?.moderatable) await member.timeout(ms, ph(c.reason, ctx) || 'Custom Command').catch(() => {});
+        if (member?.moderatable) await member.timeout(ms, phText(c.reason, ctx) || 'Custom Command').catch(() => {});
         break;
       }
 
       case 'set_nick': {
         const member = await resolveTargetMember(c, ctx);
-        if (member?.manageable) await member.setNickname(c.nick ? ph(c.nick, ctx).slice(0, 32) : null).catch(() => {});
+        if (member?.manageable) await member.setNickname(c.nick ? phText(c.nick, ctx).slice(0, 32) : null).catch(() => {});
         break;
       }
 
@@ -288,15 +318,29 @@ async function runAction(node, ctx) {
 
       case 'set_var': {
         if (!c.name) break;
-        const value = ph(c.value, ctx);
+        const value = phText(c.value, ctx);
         if (c.scope === 'global') setGlobalVar(ctx.guild.id, c.name, value);
         else ctx.vars[c.name] = value;
         break;
       }
 
+      case 'get_var': {
+        if (!c.name) break;
+        const value = getGlobalVar(ctx.guild.id, c.name);
+        ctx.vars[c.saveAs || c.name] = value === undefined ? '' : value;
+        break;
+      }
+
+      case 'delete_var': {
+        if (!c.name) break;
+        if (c.scope === 'global') deleteGlobalVar(ctx.guild.id, c.name);
+        else delete ctx.vars[c.name];
+        break;
+      }
+
       case 'set_status': {
         const TYPES = { playing: 0, watching: 3, listening: 2, competing: 5 };
-        const text = ph(c.text, ctx);
+        const text = phText(c.text, ctx);
         text
           ? ctx.client.user.setPresence({ activities: [{ name: text, type: TYPES[c.statusType] ?? 3 }] })
           : ctx.client.user.setPresence({ activities: [] });
@@ -308,7 +352,6 @@ async function runAction(node, ctx) {
         break;
       }
 
-      // ── Neu ──────────────────────────────────────────────────────────
       case 'pin_message': {
         const target = ctx.message || ctx.lastMessage;
         if (target) await target.pin().catch(() => {});
@@ -317,23 +360,24 @@ async function runAction(node, ctx) {
 
       case 'create_channel': {
         const typeMap = { text: ChannelType.GuildText, voice: ChannelType.GuildVoice, category: ChannelType.GuildCategory };
+        const categoryId = ph(c.categoryId, ctx);
         const created = await ctx.guild.channels.create({
-          name: ph(c.name, ctx) || 'neuer-kanal',
+          name: phText(c.name, ctx) || 'neuer-kanal',
           type: typeMap[c.channelType] ?? ChannelType.GuildText,
-          parent: c.categoryId || undefined,
+          parent: categoryId || undefined,
         }).catch(() => null);
         if (created && c.saveAs) ctx.vars[c.saveAs] = created.id;
         break;
       }
 
       case 'delete_channel': {
-        const target = c.channelId ? await ctx.guild.channels.fetch(c.channelId).catch(() => null) : ctx.channel;
+        const channelId = ph(c.channelId, ctx);
+        const target = channelId ? await ctx.guild.channels.fetch(channelId).catch(() => null) : ctx.channel;
         if (target) await target.delete().catch(() => {});
         break;
       }
 
       case 'open_form': {
-        // Muss die ERSTE Aktion nach dem Trigger sein (nur bei Slash-Commands).
         if (!ctx.interaction || ctx.interactionReplied) break;
         const fields = (c.fields || []).slice(0, 5);
         if (!fields.length) break;
@@ -351,7 +395,102 @@ async function runAction(node, ctx) {
           )));
         await ctx.interaction.showModal(modal);
         ctx.interactionReplied = true;
-        ctx.__paused = true; // Ausführung pausiert, geht bei Modal-Submit weiter
+        ctx.__paused = true;
+        break;
+      }
+
+      // ── Voice ────────────────────────────────────────────────────────
+      case 'move_member': {
+        const member = await resolveTargetMember(c, ctx);
+        const channelId = ph(c.channelId, ctx);
+        if (member?.voice?.channel && channelId) await member.voice.setChannel(channelId).catch(() => {});
+        break;
+      }
+      case 'voice_mute': {
+        const member = await resolveTargetMember(c, ctx);
+        if (member?.voice?.channel) await member.voice.setMute(c.muted !== false).catch(() => {});
+        break;
+      }
+      case 'voice_deafen': {
+        const member = await resolveTargetMember(c, ctx);
+        if (member?.voice?.channel) await member.voice.setDeaf(c.deafened !== false).catch(() => {});
+        break;
+      }
+      case 'voice_disconnect': {
+        const member = await resolveTargetMember(c, ctx);
+        if (member?.voice?.channel) await member.voice.disconnect().catch(() => {});
+        break;
+      }
+
+      // ── Kanäle & Threads ────────────────────────────────────────────
+      case 'edit_channel': {
+        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
+        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
+        if (!target) break;
+        const patch = {};
+        if (c.name) patch.name = phText(c.name, ctx).slice(0, 100);
+        if (c.topic !== undefined && c.topic !== '') patch.topic = phText(c.topic, ctx).slice(0, 1024);
+        if (c.slowmode !== undefined && c.slowmode !== '') patch.rateLimitPerUser = Math.max(0, Math.min(21600, Number(c.slowmode) || 0));
+        if (c.nsfw !== undefined) patch.nsfw = !!c.nsfw;
+        if (Object.keys(patch).length) await target.edit(patch).catch(() => {});
+        break;
+      }
+      case 'create_thread': {
+        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
+        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
+        if (!target?.threads) break;
+        const thread = await target.threads.create({
+          name: phText(c.name, ctx) || 'Neuer Thread',
+          autoArchiveDuration: Number(c.autoArchiveMinutes) || 1440,
+        }).catch(() => null);
+        if (thread && c.saveAs) ctx.vars[c.saveAs] = thread.id;
+        break;
+      }
+
+      // ── API ──────────────────────────────────────────────────────────
+      case 'http_request': {
+        const url = phText(c.url, ctx);
+        if (!url) break;
+        try {
+          const opts = { method: c.method || 'GET' };
+          if (c.headers) { try { opts.headers = JSON.parse(phText(c.headers, ctx)); } catch {} }
+          if (c.body && c.method && c.method !== 'GET' && c.method !== 'HEAD') {
+            opts.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+            opts.body = phText(c.body, ctx);
+          }
+          const res = await fetch(url, opts);
+          const text = await res.text();
+          if (c.saveAs) {
+            let val = text;
+            try { val = JSON.parse(text); val = JSON.stringify(val); } catch {}
+            ctx.vars[c.saveAs] = val;
+          }
+          if (c.saveStatusAs) ctx.vars[c.saveStatusAs] = String(res.status);
+        } catch (err) {
+          console.error('[CustomCommands] HTTP-Request Fehler:', err.message);
+          if (c.saveAs) ctx.vars[c.saveAs] = '';
+        }
+        break;
+      }
+
+      // ── Rollen & Invites ────────────────────────────────────────────
+      case 'create_role': {
+        const role = await ctx.guild.roles.create({
+          name: phText(c.name, ctx) || 'Neue Rolle',
+          color: c.color ? parseInt(c.color.replace('#', ''), 16) : undefined,
+        }).catch(() => null);
+        if (role && c.saveAs) ctx.vars[c.saveAs] = role.id;
+        break;
+      }
+      case 'create_invite': {
+        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
+        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
+        if (!target?.createInvite) break;
+        const invite = await target.createInvite({
+          maxUses: Number(c.maxUses) || 0,
+          maxAge: (Number(c.maxAgeMinutes) || 0) * 60,
+        }).catch(() => null);
+        if (invite && c.saveAs) ctx.vars[c.saveAs] = invite.url;
         break;
       }
 
@@ -365,14 +504,12 @@ async function runAction(node, ctx) {
 
 async function sendReply(ctx, payload) {
   if (ctx.interaction) {
-    if (ctx.interactionReplied) {
-      return ctx.interaction.followUp(payload).catch(() => null);
-    }
+    if (ctx.interactionReplied) return ctx.interaction.followUp(payload).catch(() => null);
     ctx.interactionReplied = true;
     return ctx.interaction.reply(payload).catch(() => null);
   }
   if (ctx.message) {
-    const { ephemeral, ...rest } = payload; // ephemeral geht bei normalen Nachrichten nicht
+    const { ephemeral, ...rest } = payload;
     return ctx.message.reply(rest).catch(() => null);
   }
   if (ctx.channel) {
@@ -395,7 +532,6 @@ async function runNode(cmd, nodeId, ctx) {
     return;
   }
 
-  // Für Nodes mit Buttons/Selects brauchen wir eine execId, BEVOR die Nachricht gebaut wird.
   let execIdCache = null;
   ctx.__execIdFor = (n) => {
     if (!execIdCache) execIdCache = registerPending(cmd, n, ctx);
@@ -404,7 +540,7 @@ async function runNode(cmd, nodeId, ctx) {
 
   await runAction(node, ctx);
 
-  if (ctx.__paused) return; // z.B. open_form wartet auf Modal-Submit
+  if (ctx.__paused) return;
 
   const edge = findEdge(cmd.edges, node.id, 'out');
   if (edge) await runNode(cmd, edge.toNodeId, ctx);
@@ -451,7 +587,6 @@ async function handleSlashCommand(interaction) {
     return interaction.reply({ content: '⏳ Bitte warte, bevor du diesen Command erneut benutzt.', ephemeral: true }).catch(() => {});
   }
 
-  // Optionen einsammeln
   const options = {};
   for (const opt of cmd.options || []) {
     switch (opt.type) {
@@ -475,7 +610,8 @@ async function handleSlashCommand(interaction) {
 
 async function handleTextTrigger(message) {
   if (!message.guild) return;
-  const all = db.get('customcommands')[message.guild.id] || [];
+  const store = db.get('customcommands') || {};
+  const all = store[message.guild.id] || [];
   const content = message.content;
   const matches = all.filter(c => {
     if (c.type !== 'text' || c.enabled === false) return false;
@@ -499,19 +635,19 @@ async function handleTextTrigger(message) {
   catch (err) { console.error('[CustomCommands] Fehler bei Text-Trigger:', err); }
 }
 
-// Button-Klick / Select-Auswahl aus einer laufenden Custom-Command-Kette
 async function handleComponentInteraction(interaction) {
   const [, execId, portRaw] = interaction.customId.split('|');
   const p = pending.get(execId);
   if (!p) return interaction.reply({ content: '⌛ Diese Interaktion ist abgelaufen.', ephemeral: true }).catch(() => {});
   pending.delete(execId);
 
-  const all = db.get('customcommands')[p.guildId] || [];
+  const store = db.get('customcommands') || {};
+  const all = store[p.guildId] || [];
   const cmd = all.find(c => c.id === p.cmdId);
   if (!cmd) return;
 
   let port = portRaw;
-  if (interaction.isStringSelectMenu()) port = interaction.values[0]; // "sel_N"
+  if (interaction.isStringSelectMenu()) port = interaction.values[0];
 
   const guild = interaction.guild;
   const member = await guild.members.fetch(p.ctxData.userId).catch(() => null);
@@ -524,21 +660,19 @@ async function handleComponentInteraction(interaction) {
   ctx.vars = p.ctxData.vars || {};
 
   const edge = findEdge(cmd.edges, p.nodeId, port);
-  if (!edge) {
-    return interaction.reply({ content: '❌ Für diese Aktion ist kein weiterer Schritt verbunden.', ephemeral: true }).catch(() => {});
-  }
+  if (!edge) return interaction.reply({ content: '❌ Für diese Aktion ist kein weiterer Schritt verbunden.', ephemeral: true }).catch(() => {});
   try { await runNode(cmd, edge.toNodeId, ctx); }
   catch (err) { console.error('[CustomCommands] Fehler bei Component-Interaktion:', err); }
 }
 
-// Modal-Submit (aus "Formular öffnen")
 async function handleModalInteraction(interaction) {
   const [, execId] = interaction.customId.split('|');
   const p = pending.get(execId);
   if (!p) return interaction.reply({ content: '⌛ Diese Interaktion ist abgelaufen.', ephemeral: true }).catch(() => {});
   pending.delete(execId);
 
-  const all = db.get('customcommands')[p.guildId] || [];
+  const store = db.get('customcommands') || {};
+  const all = store[p.guildId] || [];
   const cmd = all.find(c => c.id === p.cmdId);
   if (!cmd) return;
   const node = getDef(cmd.nodes, p.nodeId);
@@ -553,7 +687,6 @@ async function handleModalInteraction(interaction) {
   });
   ctx.vars = p.ctxData.vars || {};
 
-  // Formular-Werte als {input:formFeldName} bzw. {var:formFeldName} verfügbar machen
   (node?.config?.fields || []).forEach((f, i) => {
     let val = '';
     try { val = interaction.fields.getTextInputValue(`f${i}`); } catch { /* optional & leer */ }
