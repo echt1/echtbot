@@ -74,7 +74,19 @@ function phText(str, ctx) {
     });
 }
 
-function getDef(nodes, id) { return nodes.find(n => n.id === id); }
+function getDef(nodes, id) { return nodes.find(n => n.id === id); }function getDef(nodes, id) { return nodes.find(n => n.id === id); }
+
+// Nur Zahlen/Operatoren zulassen (Platzhalter wurden vorher schon ersetzt) -
+// verhindert, dass ueber {input:x}/{var:x} injizierter Text als Code laeuft.
+function safeMath(expr) {
+  const cleaned = String(expr).replace(/[^-+*/%().0-9\s]/g, '');
+  if (!cleaned.trim()) return NaN;
+  try {
+    const fn = new Function(`return (${cleaned});`);
+    const result = fn();
+    return typeof result === 'number' && isFinite(result) ? result : NaN;
+  } catch { return NaN; }
+}
 function findEdge(edges, fromNodeId, fromPort) { return edges.find(e => e.fromNodeId === fromNodeId && e.fromPort === fromPort); }
 
 async function resolveTargetMember(config, ctx) {
@@ -194,12 +206,14 @@ async function runAction(node, ctx) {
         const content = phText(c.content, ctx) || '\u200b';
         const components = needsPause(node) ? buildComponents(node, ctx.__execIdFor(node)) : [];
         ctx.lastMessage = await sendReply(ctx, { content, ephemeral: !!c.ephemeral, components });
+        if (ctx.lastMessage) ctx.messagesByNode[node.id] = ctx.lastMessage;
         break;
       }
       case 'reply_embed': {
         const embed = buildEmbed(c.embed, ctx);
         const components = needsPause(node) ? buildComponents(node, ctx.__execIdFor(node)) : [];
         ctx.lastMessage = await sendReply(ctx, { content: c.content ? phText(c.content, ctx) : undefined, embeds: [embed], ephemeral: !!c.ephemeral, components });
+        if (ctx.lastMessage) ctx.messagesByNode[node.id] = ctx.lastMessage;
         break;
       }
       case 'random_response': {
@@ -215,21 +229,29 @@ async function runAction(node, ctx) {
         const embed = c.embed ? buildEmbed(c.embed, ctx) : null;
         const components = needsPause(node) ? buildComponents(node, ctx.__execIdFor(node)) : [];
         ctx.lastMessage = await target.send({ content: c.content ? phText(c.content, ctx) : undefined, embeds: embed ? [embed] : [], components });
+        if (ctx.lastMessage) ctx.messagesByNode[node.id] = ctx.lastMessage;
         break;
       }
       case 'edit_message': {
-        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
-        const messageId = ph(c.messageId, ctx);
-        if (!messageId) break;
-        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
-        if (!target) break;
-        const msg = await target.messages.fetch(messageId).catch(() => null);
-        if (!msg) break;
+        let targetMsg = null;
+        const ref = c.messageRef || '';
+        if (ref.startsWith('node:')) {
+          targetMsg = ctx.messagesByNode[ref.slice(5)] || null;
+        }
+        if (!targetMsg) {
+          const channelId = ph(c.channelId, ctx) || ctx.channel.id;
+          const messageId = ph(ref, ctx) || ph(c.messageId, ctx);
+          if (messageId) {
+            const chx = await ctx.guild.channels.fetch(channelId).catch(() => null);
+            targetMsg = chx ? await chx.messages.fetch(messageId).catch(() => null) : null;
+          }
+        }
+        if (!targetMsg) break;
         const embed = c.embed ? buildEmbed(c.embed, ctx) : null;
         const payload = {};
         if (c.content) payload.content = phText(c.content, ctx);
         if (embed) payload.embeds = [embed];
-        await msg.edit(payload).catch(() => {});
+        await targetMsg.edit(payload).catch(() => {});
         break;
       }
       case 'dm': {
@@ -305,6 +327,15 @@ async function runAction(node, ctx) {
         if (!c.name) break;
         const value = getGlobalVar(ctx.guild.id, c.name);
         ctx.vars[c.saveAs || c.name] = value === undefined ? '' : value;
+        break;
+      }
+      case 'calculate': {
+        if (!c.saveAs) break;
+        const expr = phText(c.expression, ctx);
+        const result = safeMath(expr);
+        const value = isNaN(result) ? '' : result;
+        if (c.scope === 'global') setGlobalVar(ctx.guild.id, c.saveAs, value);
+        else ctx.vars[c.saveAs] = value;
         break;
       }
       case 'delete_var': {
@@ -492,9 +523,8 @@ async function runNode(cmd, nodeId, ctx) {
 }
 
 function makeCtx({ client, guild, member, user, channel, message, interaction, options }) {
-  return { client, guild, member, user, channel, message, interaction, options: options || {}, vars: {}, interactionReplied: false, lastMessage: null, __paused: false };
+  return { client, guild, member, user, channel, message, interaction, options: options || {}, vars: {}, interactionReplied: false, lastMessage: null, messagesByNode: {}, __paused: false };
 }
-
 async function executeCommand(cmd, ctx) {
   const trigger = cmd.nodes.find(n => n.kind === 'trigger');
   if (!trigger) return;
