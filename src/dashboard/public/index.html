@@ -1071,28 +1071,18 @@ const BLOCK_DEFS = {
     { type:'open_form',      icon:'📋', label:'Open Form',           desc:'Formular öffnen (Modal)',       color:'#5a3e8e', cat:'Nachrichten' },
     { type:'add_role',       icon:'🟢', label:'Add Role',            desc:'Rolle hinzufügen',             color:'#1e6eb5', cat:'Rollen' },
     { type:'remove_role',    icon:'🔴', label:'Remove Role',         desc:'Rolle entfernen',              color:'#1e6eb5', cat:'Rollen' },
-    { type:'create_role',    icon:'🆕', label:'Create Role',         desc:'Rolle erstellen',               color:'#1e6eb5', cat:'Rollen' },
+    { type:'create_channel', icon:'➕', label:'Create Channel',      desc:'Kanal erstellen',               color:'#5a3e8e', cat:'Kanäle' },
+    { type:'delete_channel', icon:'🗑️',  label:'Delete Channel',      desc:'Kanal löschen',                 color:'#c0392b', cat:'Kanäle' },
     { type:'kick',           icon:'👢', label:'Kick Member',         desc:'User kicken',                  color:'#c0392b', cat:'Moderation' },
     { type:'ban',            icon:'🔨', label:'Ban Member',          desc:'User bannen',                  color:'#c0392b', cat:'Moderation' },
     { type:'unban',          icon:'🔓', label:'Unban Member',        desc:'User entbannen',                color:'#1e7e5a', cat:'Moderation' },
     { type:'timeout',        icon:'🔇', label:'Timeout',             desc:'User timeoutet',               color:'#c0392b', cat:'Moderation' },
     { type:'set_nick',       icon:'✏️',  label:'Set Nickname',        desc:'Nickname ändern',              color:'#1e6eb5', cat:'Moderation' },
-    { type:'create_channel', icon:'➕', label:'Create Channel',      desc:'Kanal erstellen',               color:'#5a3e8e', cat:'Kanäle' },
-    { type:'delete_channel', icon:'🗑️',  label:'Delete Channel',      desc:'Kanal löschen',                 color:'#c0392b', cat:'Kanäle' },
-    { type:'edit_channel',   icon:'🛠️', label:'Edit Channel',        desc:'Name/Topic/Slowmode ändern',    color:'#5a3e8e', cat:'Kanäle' },
-    { type:'create_thread',  icon:'🧵', label:'Create Thread',       desc:'Thread erstellen',              color:'#5a3e8e', cat:'Kanäle' },
-    { type:'delete_thread',  icon:'🧵', label:'Delete Thread',       desc:'Thread löschen',                color:'#c0392b', cat:'Kanäle' },
-    { type:'create_invite',  icon:'🔗', label:'Create Invite',       desc:'Server-Einladung erstellen',    color:'#5a3e8e', cat:'Kanäle' },
-    { type:'voice_move',     icon:'🔊', label:'Move Member',         desc:'User in anderen VC verschieben',color:'#16a085', cat:'Voice' },
-    { type:'voice_mute',     icon:'🔇', label:'Server Mute',         desc:'User stumm schalten (VC)',      color:'#16a085', cat:'Voice' },
-    { type:'voice_deafen',   icon:'🔈', label:'Server Deafen',       desc:'User Sound deaktivieren (VC)',  color:'#16a085', cat:'Voice' },
-    { type:'voice_disconnect',icon:'📴',label:'Disconnect',          desc:'User aus VC werfen',            color:'#16a085', cat:'Voice' },
     { type:'set_var',        icon:'📦', label:'Set Variable',        desc:'Variable setzen',              color:'#5a3e8e', cat:'Variablen' },
     { type:'get_var',        icon:'📥', label:'Get Variable',        desc:'Globale Variable laden',        color:'#5a3e8e', cat:'Variablen' },
     { type:'delete_var',     icon:'🗑️',  label:'Delete Variable',     desc:'Variable löschen',               color:'#5a3e8e', cat:'Variablen' },
     { type:'wait',           icon:'⏳', label:'Wait',                desc:'Warten',                       color:'#5a3e8e', cat:'Sonstiges' },
     { type:'set_status',     icon:'🎮', label:'Set Status',          desc:'Bot-Status ändern',            color:'#5a3e8e', cat:'Sonstiges' },
-    { type:'http_request',   icon:'🌐', label:'HTTP Request',        desc:'Externe API aufrufen',          color:'#7b0ea8', cat:'Sonstiges' },
   ],
   conditions: [
     { type:'condition_role',       icon:'🛡️', label:'Role Condition',       desc:'User hat/hat nicht Rolle',     color:'#1e7e5a' },
@@ -1186,13 +1176,16 @@ function openEditor(){
     </div>
   </div>
   <div style="display:flex;height:calc(100vh - 200px)">
-    <div id="cc-palette" style="width:230px;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0">
+    <div id="cc-palette" style="width:230px;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column">
       <div style="display:flex;border-bottom:1px solid var(--border)">
         <button class="cc-ptab active" onclick="ccTab('actions',this)">Aktionen</button>
         <button class="cc-ptab" onclick="ccTab('conditions',this)">Konditionen</button>
         ${CC.cmd.type==='slash'?'<button class="cc-ptab" onclick="ccTab(\'options\',this)">Optionen</button>':''}
       </div>
-      <div id="cc-palette-items"></div>
+      <div style="padding:8px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <input type="text" id="cc-palette-search" placeholder="🔍 Blöcke durchsuchen..." oninput="renderPaletteItems(this.value)" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.82rem">
+      </div>
+      <div id="cc-palette-items" style="flex:1;overflow-y:auto"></div>
     </div>
     <div id="cc-canvas-wrap" style="flex:1;overflow:hidden;position:relative;background:#0d0e11"
       onmousedown="ccMD(event)" onmousemove="ccMM(event)" onmouseup="ccMU(event)"
@@ -1220,11 +1213,29 @@ function ccCancelEdit(){CC.view='list';document.getElementById('cc-list-view').s
 function ccTab(tab,el){
   document.querySelectorAll('.cc-ptab').forEach(t=>t.classList.remove('active'));
   if(el)el.classList.add('active');
-  document.getElementById('cc-palette-items').innerHTML=(BLOCK_DEFS[tab]||[]).map(d=>`
-    <div class="cc-bi" onclick="ccAddNode('${d.type}')">
-      <div class="cc-bic" style="background:${d.color}22;color:${d.color}">${d.icon}</div>
-      <div><div style="font-size:.82rem;font-weight:500">${d.label}</div><div style="font-size:.72rem;color:var(--muted)">${d.desc}</div></div>
-    </div>`).join('');
+  CC._paletteTab=tab;
+  const s=document.getElementById('cc-palette-search');if(s)s.value='';
+  renderPaletteItems('');
+}
+
+const CAT_ORDER=['Nachrichten','Rollen','Kanäle','Moderation','Variablen','Bedingungen','Optionen','Sonstiges'];
+function renderPaletteItems(query){
+  const q=(query||'').trim().toLowerCase();
+  const all=BLOCK_DEFS[CC._paletteTab]||[];
+  const items=q?all.filter(d=>d.label.toLowerCase().includes(q)||d.desc.toLowerCase().includes(q)):all;
+  const cats={};
+  items.forEach(d=>{const k=d.cat||'Sonstiges';(cats[k]=cats[k]||[]).push(d);});
+  const keys=Object.keys(cats).sort((a,b)=>CAT_ORDER.indexOf(a)-CAT_ORDER.indexOf(b));
+  const el=document.getElementById('cc-palette-items');
+  if(!el)return;
+  el.innerHTML=keys.length?keys.map(k=>`
+    <div style="padding:7px 12px 3px;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600">${k}</div>
+    ${cats[k].map(d=>`
+      <div class="cc-bi" onclick="ccAddNode('${d.type}')">
+        <div class="cc-bic" style="background:${d.color}22;color:${d.color}">${d.icon}</div>
+        <div><div style="font-size:.82rem;font-weight:500">${d.label}</div><div style="font-size:.72rem;color:var(--muted)">${d.desc}</div></div>
+      </div>`).join('')}
+  `).join(''):'<div style="padding:20px 12px;text-align:center;color:var(--muted);font-size:.82rem">Keine Treffer für "'+query.replace(/</g,'&lt;')+'"</div>';
 }
 
 function ccAddNode(type){
