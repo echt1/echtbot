@@ -1059,39 +1059,40 @@ const CC = {
 
 const BLOCK_DEFS = {
   actions: [
-    { type:'reply_text',     icon:'💬', label:'Text Reply',         desc:'Antwortet mit Text',            color:'#1e6eb5' },
-    { type:'reply_embed',    icon:'🎨', label:'Embed Reply',         desc:'Antwortet mit Embed',           color:'#1e6eb5' },
-    { type:'random_response',icon:'🎲', label:'Random Reply',        desc:'Zufällige Antwort',             color:'#1e6eb5' },
-    { type:'send_message',   icon:'📤', label:'Send to Channel',     desc:'Nachricht an Kanal',            color:'#1e6eb5' },
-    { type:'dm',             icon:'📩', label:'Direct Message',      desc:'DM an User',                   color:'#1e6eb5' },
-    { type:'add_role',       icon:'🟢', label:'Add Role',            desc:'Rolle hinzufügen',             color:'#1e6eb5' },
-    { type:'remove_role',    icon:'🔴', label:'Remove Role',         desc:'Rolle entfernen',              color:'#1e6eb5' },
-    { type:'kick',           icon:'👢', label:'Kick Member',         desc:'User kicken',                  color:'#c0392b' },
-    { type:'ban',            icon:'🔨', label:'Ban Member',          desc:'User bannen',                  color:'#c0392b' },
-    { type:'timeout',        icon:'🔇', label:'Timeout',             desc:'User timeoutet',               color:'#c0392b' },
-    { type:'set_nick',       icon:'✏️',  label:'Set Nickname',        desc:'Nickname ändern',              color:'#1e6eb5' },
-    { type:'delete_message', icon:'🗑️',  label:'Delete Message',      desc:'Nachricht löschen',            color:'#c0392b' },
-    { type:'wait',           icon:'⏳', label:'Wait',                desc:'Warten',                       color:'#5a3e8e' },
-    { type:'set_var',        icon:'📦', label:'Set Variable',        desc:'Variable setzen',              color:'#5a3e8e' },
-    { type:'set_status',     icon:'🎮', label:'Set Status',          desc:'Bot-Status ändern',            color:'#5a3e8e' },
-    { type:'react',          icon:'🔔', label:'React',               desc:'Reaktion hinzufügen',          color:'#1e6eb5' },
-    { type:'pin_message',    icon:'📌', label:'Pin Message',         desc:'Nachricht anpinnen',            color:'#1e6eb5' },
-    { type:'create_channel', icon:'➕', label:'Create Channel',      desc:'Kanal erstellen',               color:'#5a3e8e' },
-    { type:'delete_channel', icon:'🗑️',  label:'Delete Channel',      desc:'Kanal löschen',                 color:'#c0392b' },
-    { type:'open_form',      icon:'📋', label:'Open Form',           desc:'Formular öffnen (Modal)',       color:'#5a3e8e' },
-    { type:'edit_message',   icon:'📝', label:'Edit Message',        desc:'Bot-Nachricht bearbeiten',      color:'#1e6eb5' },
-    { type:'get_var',        icon:'📥', label:'Get Variable',        desc:'Globale Variable laden',        color:'#5a3e8e' },
-    { type:'delete_var',     icon:'🗑️',  label:'Delete Variable',     desc:'Variable löschen',               color:'#5a3e8e' },
-    { type:'unban',          icon:'🔓', label:'Unban Member',        desc:'User entbannen',                color:'#1e7e5a' },
-    { type:'move_member',    icon:'🔀', label:'Move Member',        desc:'User in anderen VC verschieben', color:'#16a085', cat:'Voice' },
-    { type:'voice_mute',     icon:'🔇', label:'Server-Mute',        desc:'User server-muten/entmuten',    color:'#16a085', cat:'Voice' },
-    { type:'voice_deafen',   icon:'🔈', label:'Server-Deafen',      desc:'User server-deafen/undeafen',   color:'#16a085', cat:'Voice' },
-    { type:'voice_disconnect',icon:'📵',label:'Voice Disconnect',   desc:'User aus VC werfen',            color:'#16a085', cat:'Voice' },
+    { type:'reply_text',     icon:'💬', label:'Text Reply',         desc:'Antwortet mit Text',            color:'#1e6eb5', cat:'Nachrichten' },
+    { type:'reply_embed',    icon:'🎨', label:'Embed Reply',         desc:'Antwortet mit Embed',           color:'#1e6eb5', cat:'Nachrichten' },
+    { type:'random_response',icon:'🎲', label:'Random Reply',        desc:'Zufällige Antwort',             color:'#1e6eb5', cat:'Nachrichten' },
+    { type:'send_message',   icon:'📤', label:'Send to Channel',     desc:'Nachricht an Kanal',            color:'#1e6eb5', cat:'Nachrichten' },
+    { type:'edit_message',   icon:'📝', label:'Edit Message',        desc:'Bot-Nachricht bearbeiten',      color:'#1e6eb5', cat:'Nachrichten' },
+    { type:'dm',             icon:'📩', label:'Direct Message',      desc:'DM an User',                   color:'#1e6eb5', cat:'Nachrichten' },
+    { type:'delete_message', icon:'🗑️',  label:'Delete Message',      desc:'Nachricht löschen',            color:'#c0392b', cat:'Nachrichten' },
+    { type:'react',          icon:'🔔', label:'React',               desc:'Reaktion hinzufügen',          color:'#1e6eb5', cat:'Nachrichten' },
+    { type:'pin_message',    icon:'📌', label:'Pin Message',         desc:'Nachricht anpinnen',            color:'#1e6eb5', cat:'Nachrichten' },
+    { type:'open_form',      icon:'📋', label:'Open Form',           desc:'Formular öffnen (Modal)',       color:'#5a3e8e', cat:'Nachrichten' },
+    { type:'add_role',       icon:'🟢', label:'Add Role',            desc:'Rolle hinzufügen',             color:'#1e6eb5', cat:'Rollen' },
+    { type:'remove_role',    icon:'🔴', label:'Remove Role',         desc:'Rolle entfernen',              color:'#1e6eb5', cat:'Rollen' },
+    { type:'create_role',    icon:'🆕', label:'Create Role',         desc:'Rolle erstellen',               color:'#1e6eb5', cat:'Rollen' },
+    { type:'kick',           icon:'👢', label:'Kick Member',         desc:'User kicken',                  color:'#c0392b', cat:'Moderation' },
+    { type:'ban',            icon:'🔨', label:'Ban Member',          desc:'User bannen',                  color:'#c0392b', cat:'Moderation' },
+    { type:'unban',          icon:'🔓', label:'Unban Member',        desc:'User entbannen',                color:'#1e7e5a', cat:'Moderation' },
+    { type:'timeout',        icon:'🔇', label:'Timeout',             desc:'User timeoutet',               color:'#c0392b', cat:'Moderation' },
+    { type:'set_nick',       icon:'✏️',  label:'Set Nickname',        desc:'Nickname ändern',              color:'#1e6eb5', cat:'Moderation' },
+    { type:'create_channel', icon:'➕', label:'Create Channel',      desc:'Kanal erstellen',               color:'#5a3e8e', cat:'Kanäle' },
+    { type:'delete_channel', icon:'🗑️',  label:'Delete Channel',      desc:'Kanal löschen',                 color:'#c0392b', cat:'Kanäle' },
     { type:'edit_channel',   icon:'🛠️', label:'Edit Channel',        desc:'Name/Topic/Slowmode ändern',    color:'#5a3e8e', cat:'Kanäle' },
-    { type:'create_thread',  icon:'🧵', label:'Create Thread',      desc:'Thread erstellen',              color:'#5a3e8e', cat:'Kanäle' },
-    { type:'create_invite',  icon:'🔗', label:'Create Invite',      desc:'Server-Invite erstellen',       color:'#1e6eb5', cat:'Kanäle' },
-    { type:'create_role',    icon:'🎭', label:'Create Role',        desc:'Rolle erstellen',               color:'#1e6eb5', cat:'Rollen' },
-    { type:'http_request',   icon:'🌐', label:'HTTP Request',       desc:'Externe API abrufen',           color:'#c0392b', cat:'Sonstiges' },
+    { type:'create_thread',  icon:'🧵', label:'Create Thread',       desc:'Thread erstellen',              color:'#5a3e8e', cat:'Kanäle' },
+    { type:'delete_thread',  icon:'🧵', label:'Delete Thread',       desc:'Thread löschen',                color:'#c0392b', cat:'Kanäle' },
+    { type:'create_invite',  icon:'🔗', label:'Create Invite',       desc:'Server-Einladung erstellen',    color:'#5a3e8e', cat:'Kanäle' },
+    { type:'voice_move',     icon:'🔊', label:'Move Member',         desc:'User in anderen VC verschieben',color:'#16a085', cat:'Voice' },
+    { type:'voice_mute',     icon:'🔇', label:'Server Mute',         desc:'User stumm schalten (VC)',      color:'#16a085', cat:'Voice' },
+    { type:'voice_deafen',   icon:'🔈', label:'Server Deafen',       desc:'User Sound deaktivieren (VC)',  color:'#16a085', cat:'Voice' },
+    { type:'voice_disconnect',icon:'📴',label:'Disconnect',          desc:'User aus VC werfen',            color:'#16a085', cat:'Voice' },
+    { type:'set_var',        icon:'📦', label:'Set Variable',        desc:'Variable setzen',              color:'#5a3e8e', cat:'Variablen' },
+    { type:'get_var',        icon:'📥', label:'Get Variable',        desc:'Globale Variable laden',        color:'#5a3e8e', cat:'Variablen' },
+    { type:'delete_var',     icon:'🗑️',  label:'Delete Variable',     desc:'Variable löschen',               color:'#5a3e8e', cat:'Variablen' },
+    { type:'wait',           icon:'⏳', label:'Wait',                desc:'Warten',                       color:'#5a3e8e', cat:'Sonstiges' },
+    { type:'set_status',     icon:'🎮', label:'Set Status',          desc:'Bot-Status ändern',            color:'#5a3e8e', cat:'Sonstiges' },
+    { type:'http_request',   icon:'🌐', label:'HTTP Request',        desc:'Externe API aufrufen',          color:'#7b0ea8', cat:'Sonstiges' },
   ],
   conditions: [
     { type:'condition_role',       icon:'🛡️', label:'Role Condition',       desc:'User hat/hat nicht Rolle',     color:'#1e7e5a' },
@@ -1557,6 +1558,64 @@ function renderCCCfg(nodeId){
       case 'unban':
         html+=inp('userId','User-ID (Discord-ID des gebannten Users)','123456789012345678')+inp('reason','Grund (optional)','Grund...');
         break;
+      case 'edit_channel':
+        html+=idPicker(node.id,'channelId','Kanal',chCache[g]||[],{value:'',label:'Aktueller Kanal'})+
+          inp('name','Neuer Name (optional)','neuer-name')+
+          inp('topic','Neues Thema (optional)','Thema...')+
+          inp('slowmode','Slowmode in Sek. (optional, 0=aus)','0','number')+
+          tog('nsfw','Als NSFW markieren');
+        break;
+      case 'create_thread':
+        html+=idPicker(node.id,'channelId','In Kanal',chCache[g]||[],{value:'',label:'Aktueller Kanal'})+
+          inp('name','Thread-Name','Neuer Thread')+
+          `<label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Auto-Archivieren nach</label>
+           <select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.autoArchiveMinutes=this.value" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:9px">
+             <option value="60" ${c.autoArchiveMinutes=='60'?'selected':''}>1 Stunde</option>
+             <option value="1440" ${!c.autoArchiveMinutes||c.autoArchiveMinutes=='1440'?'selected':''}>24 Stunden</option>
+             <option value="4320" ${c.autoArchiveMinutes=='4320'?'selected':''}>3 Tage</option>
+             <option value="10080" ${c.autoArchiveMinutes=='10080'?'selected':''}>1 Woche</option>
+           </select>`+
+          inp('saveAs','Thread-ID als Variable speichern (optional)','threadId');
+        break;
+      case 'delete_thread':
+        html+=inp('threadId','Thread-ID','1234567890')+`<p style="color:var(--muted);font-size:.78rem">Tipp: mit "Create Thread" + "Als Variable speichern" kannst du hier {var:name} nutzen.</p>`;
+        break;
+      case 'create_invite':
+        html+=idPicker(node.id,'channelId','Kanal',chCache[g]||[],{value:'',label:'Aktueller Kanal'})+
+          inp('maxUses','Max. Nutzungen (0=unbegrenzt)','0','number')+
+          inp('maxAgeMinutes','Gültig für X Minuten (0=unbegrenzt)','0','number')+
+          inp('saveAs','Invite-Link als Variable speichern','inviteUrl');
+        break;
+      case 'create_role':
+        html+=inp('name','Rollenname','Neue Rolle')+
+          `<label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Farbe</label>
+           <input type="color" value="${c.color||'#5865f2'}" style="width:100%;height:34px;padding:2px;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-bottom:9px" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.color=this.value">`+
+          tog('hoist','Separat in Mitgliederliste anzeigen')+tog('mentionable','Erwähnbar machen')+
+          inp('saveAs','Rollen-ID als Variable speichern (optional)','neueRolle');
+        break;
+      case 'voice_move':
+        html+=rsel()+idPicker(node.id,'channelId','Ziel-Voice-Channel (ID)',[],{value:'',label:'ID eingeben'});
+        break;
+      case 'voice_mute':
+        html+=rsel()+tog('state','Stumm schalten (aus = aufheben)');
+        break;
+      case 'voice_deafen':
+        html+=rsel()+tog('state','Sound deaktivieren (aus = aufheben)');
+        break;
+      case 'voice_disconnect':
+        html+=rsel()+`<p style="color:var(--muted);font-size:.83rem">Wirft den User aus seinem aktuellen Voice-Channel.</p>`;
+        break;
+      case 'http_request':
+        html+=`<label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Methode</label>
+          <select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.method=this.value" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:9px">
+            ${['GET','POST','PUT','PATCH','DELETE'].map(m=>`<option value="${m}" ${(c.method||'GET')===m?'selected':''}>${m}</option>`).join('')}
+          </select>`+
+          inp('url','URL','https://api.example.com/...')+
+          ta('headers','Headers (JSON, optional)','{"Authorization":"Bearer ..."}')+
+          ta('body','Body (optional, nicht bei GET)','{"key":"value"}')+
+          inp('saveAs','Antwort speichern als Variable','apiResponse')+
+          `<p style="color:var(--muted);font-size:.76rem">Antwort landet als Text (oder JSON-String) in {var:name}.</p>`;
+        break;
       case 'open_form': {
         const fs=c.fields?.length?c.fields:[];
         html+=`<p style="font-size:.78rem;color:var(--muted);margin-bottom:8px">⚠️ Muss die <b>erste</b> Aktion nach dem Trigger sein (nur bei Slash-Commands, nicht bei Text-Triggern).</p>`+
@@ -1635,6 +1694,7 @@ function renderCCCfg(nodeId){
     }
   }
   panel.innerHTML=html;
+}
 
 async function ccSave(){
   const cmd=CC.cmd;
