@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// CUSTOM COMMANDS – AUSFÜHRUNGS-ENGINE (Backend)
+// CUSTOM COMMANDS – AUSFÜHRUNGS-ENGINE (Backend) – v3
 // ═══════════════════════════════════════════════════════════════════════
 
 const {
@@ -9,7 +9,6 @@ const {
 } = require('discord.js');
 const db = require('./database');
 
-// ── In-Memory State ───────────────────────────────────────────────────
 const cooldowns = new Map();
 const pending = new Map();
 setInterval(() => {
@@ -21,7 +20,6 @@ function newExecId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
-// ── Globale Variablen (persistiert pro Guild) ─────────────────────────
 function getGlobalVar(guildId, name) {
   const store = db.get('ccvars') || {};
   return store[guildId]?.[name];
@@ -38,10 +36,6 @@ function deleteGlobalVar(guildId, name) {
   db.set('ccvars', store);
 }
 
-// ── Platzhalter ersetzen ───────────────────────────────────────────────
-// Wird auf ALLE Text- UND ID-Felder angewendet (Rolle/Kanal/User-IDs
-// koennen jetzt entweder eine echte Discord-ID ODER {var:x}/{input:x} sein -
-// ph() laesst normale IDs unveraendert und ersetzt nur erkannte Platzhalter).
 function ph(str, ctx) {
   if (str === undefined || str === null) return str;
   return String(str)
@@ -53,7 +47,7 @@ function ph(str, ctx) {
     .replace(/\{input:([a-zA-Z0-9_]+)\}/g, (_, name) => {
       const v = ctx.options[name];
       if (v === undefined || v === null) return '';
-      return v.id ? v.id : String(v); // Discord-Objekte (User/Channel/Role) -> rohe ID fuer ID-Felder
+      return v.id ? v.id : String(v);
     })
     .replace(/\{var:([a-zA-Z0-9_]+)\}/g, (_, name) => {
       if (ctx.vars[name] !== undefined) return String(ctx.vars[name]);
@@ -61,7 +55,6 @@ function ph(str, ctx) {
       return g === undefined ? '' : String(g);
     });
 }
-// Variante fuer Anzeige-Text (User/Channel-Objekte als Mention statt roher ID)
 function phText(str, ctx) {
   if (str === undefined || str === null) return str;
   return String(str)
@@ -84,7 +77,6 @@ function phText(str, ctx) {
 function getDef(nodes, id) { return nodes.find(n => n.id === id); }
 function findEdge(edges, fromNodeId, fromPort) { return edges.find(e => e.fromNodeId === fromNodeId && e.fromPort === fromPort); }
 
-// ── Ziel-Member auflösen (für DM/Kick/Ban/Rollen/Nick/Timeout) ─────────
 async function resolveTargetMember(config, ctx) {
   if (config.targetInput) {
     const val = ctx.options[config.targetInput];
@@ -96,7 +88,6 @@ async function resolveTargetMember(config, ctx) {
   return ctx.member;
 }
 
-// ── Buttons/Selects zu Components bauen ────────────────────────────────
 function buildComponents(node, execId) {
   const rows = [];
   if (node.buttons?.length) {
@@ -126,18 +117,13 @@ function buildComponents(node, execId) {
   return rows;
 }
 
-function needsPause(node) {
-  return (node.buttons?.length || node.selects?.length) > 0;
-}
+function needsPause(node) { return (node.buttons?.length || node.selects?.length) > 0; }
 
 function registerPending(cmd, node, ctx) {
   const execId = newExecId();
   pending.set(execId, {
     cmdId: cmd.id, guildId: ctx.guild.id, nodeId: node.id,
-    ctxData: {
-      userId: ctx.user.id, channelId: ctx.channel.id,
-      options: ctx.options, vars: ctx.vars,
-    },
+    ctxData: { userId: ctx.user.id, channelId: ctx.channel.id, options: ctx.options, vars: ctx.vars },
     expires: Date.now() + 15 * 60_000,
   });
   return execId;
@@ -210,35 +196,27 @@ async function runAction(node, ctx) {
         ctx.lastMessage = await sendReply(ctx, { content, ephemeral: !!c.ephemeral, components });
         break;
       }
-
       case 'reply_embed': {
         const embed = buildEmbed(c.embed, ctx);
         const components = needsPause(node) ? buildComponents(node, ctx.__execIdFor(node)) : [];
         ctx.lastMessage = await sendReply(ctx, { content: c.content ? phText(c.content, ctx) : undefined, embeds: [embed], ephemeral: !!c.ephemeral, components });
         break;
       }
-
       case 'random_response': {
         const list = c.responses?.length ? c.responses : ['...'];
         const content = phText(list[Math.floor(Math.random() * list.length)], ctx);
         ctx.lastMessage = await sendReply(ctx, { content, ephemeral: !!c.ephemeral });
         break;
       }
-
       case 'send_message': {
         const channelId = ph(c.channelId, ctx);
         const target = channelId ? await ctx.guild.channels.fetch(channelId).catch(() => null) : ctx.channel;
         if (!target) break;
         const embed = c.embed ? buildEmbed(c.embed, ctx) : null;
         const components = needsPause(node) ? buildComponents(node, ctx.__execIdFor(node)) : [];
-        ctx.lastMessage = await target.send({
-          content: c.content ? phText(c.content, ctx) : undefined,
-          embeds: embed ? [embed] : [],
-          components,
-        });
+        ctx.lastMessage = await target.send({ content: c.content ? phText(c.content, ctx) : undefined, embeds: embed ? [embed] : [], components });
         break;
       }
-
       case 'edit_message': {
         const channelId = ph(c.channelId, ctx) || ctx.channel.id;
         const messageId = ph(c.messageId, ctx);
@@ -254,14 +232,12 @@ async function runAction(node, ctx) {
         await msg.edit(payload).catch(() => {});
         break;
       }
-
       case 'dm': {
         const member = await resolveTargetMember(c, ctx);
         if (!member) break;
         await member.send({ content: phText(c.content, ctx) || '\u200b' }).catch(() => {});
         break;
       }
-
       case 'add_role':
       case 'remove_role': {
         const roleId = ph(c.roleId, ctx);
@@ -272,50 +248,52 @@ async function runAction(node, ctx) {
         else await member.roles.remove(roleId).catch(() => {});
         break;
       }
-
+      case 'create_role': {
+        const role = await ctx.guild.roles.create({
+          name: phText(c.name, ctx) || 'Neue Rolle',
+          color: c.color ? parseInt(c.color.replace('#', ''), 16) : undefined,
+          hoist: !!c.hoist,
+          mentionable: !!c.mentionable,
+        }).catch(() => null);
+        if (role && c.saveAs) ctx.vars[c.saveAs] = role.id;
+        break;
+      }
       case 'kick': {
         const member = await resolveTargetMember(c, ctx);
         if (member?.kickable) await member.kick(phText(c.reason, ctx) || 'Custom Command').catch(() => {});
         break;
       }
-
       case 'ban': {
         const member = await resolveTargetMember(c, ctx);
         if (member?.bannable) await member.ban({ reason: phText(c.reason, ctx) || 'Custom Command' }).catch(() => {});
         break;
       }
-
       case 'unban': {
         const userId = ph(c.userId, ctx);
         if (!userId) break;
         await ctx.guild.bans.remove(userId, phText(c.reason, ctx) || 'Custom Command').catch(() => {});
         break;
       }
-
       case 'timeout': {
         const member = await resolveTargetMember(c, ctx);
         const ms = (Number(c.durationMinutes) || 10) * 60_000;
         if (member?.moderatable) await member.timeout(ms, phText(c.reason, ctx) || 'Custom Command').catch(() => {});
         break;
       }
-
       case 'set_nick': {
         const member = await resolveTargetMember(c, ctx);
         if (member?.manageable) await member.setNickname(c.nick ? phText(c.nick, ctx).slice(0, 32) : null).catch(() => {});
         break;
       }
-
       case 'delete_message': {
         if (ctx.message) await ctx.message.delete().catch(() => {});
         break;
       }
-
       case 'wait': {
         const secs = Math.max(0, Math.min(10, Number(c.seconds) || 1));
         await new Promise(r => setTimeout(r, secs * 1000));
         break;
       }
-
       case 'set_var': {
         if (!c.name) break;
         const value = phText(c.value, ctx);
@@ -323,21 +301,18 @@ async function runAction(node, ctx) {
         else ctx.vars[c.name] = value;
         break;
       }
-
       case 'get_var': {
         if (!c.name) break;
         const value = getGlobalVar(ctx.guild.id, c.name);
         ctx.vars[c.saveAs || c.name] = value === undefined ? '' : value;
         break;
       }
-
       case 'delete_var': {
         if (!c.name) break;
         if (c.scope === 'global') deleteGlobalVar(ctx.guild.id, c.name);
         else delete ctx.vars[c.name];
         break;
       }
-
       case 'set_status': {
         const TYPES = { playing: 0, watching: 3, listening: 2, competing: 5 };
         const text = phText(c.text, ctx);
@@ -346,18 +321,15 @@ async function runAction(node, ctx) {
           : ctx.client.user.setPresence({ activities: [] });
         break;
       }
-
       case 'react': {
         if (ctx.message && c.emoji) await ctx.message.react(c.emoji).catch(() => {});
         break;
       }
-
       case 'pin_message': {
         const target = ctx.message || ctx.lastMessage;
         if (target) await target.pin().catch(() => {});
         break;
       }
-
       case 'create_channel': {
         const typeMap = { text: ChannelType.GuildText, voice: ChannelType.GuildVoice, category: ChannelType.GuildCategory };
         const categoryId = ph(c.categoryId, ctx);
@@ -369,14 +341,90 @@ async function runAction(node, ctx) {
         if (created && c.saveAs) ctx.vars[c.saveAs] = created.id;
         break;
       }
-
       case 'delete_channel': {
         const channelId = ph(c.channelId, ctx);
         const target = channelId ? await ctx.guild.channels.fetch(channelId).catch(() => null) : ctx.channel;
         if (target) await target.delete().catch(() => {});
         break;
       }
-
+      case 'edit_channel': {
+        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
+        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
+        if (!target) break;
+        const payload = {};
+        if (c.name) payload.name = phText(c.name, ctx).slice(0, 100);
+        if (c.topic) payload.topic = phText(c.topic, ctx).slice(0, 1024);
+        if (c.slowmode !== undefined && c.slowmode !== '') payload.rateLimitPerUser = Math.max(0, Math.min(21600, Number(c.slowmode) || 0));
+        if (c.nsfw !== undefined) payload.nsfw = !!c.nsfw;
+        if (Object.keys(payload).length) await target.edit(payload).catch(() => {});
+        break;
+      }
+      case 'create_thread': {
+        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
+        const parent = await ctx.guild.channels.fetch(channelId).catch(() => null);
+        if (!parent?.threads) break;
+        const thread = await parent.threads.create({
+          name: phText(c.name, ctx) || 'neuer-thread',
+          autoArchiveDuration: Number(c.autoArchiveMinutes) || 1440,
+        }).catch(() => null);
+        if (thread && c.saveAs) ctx.vars[c.saveAs] = thread.id;
+        break;
+      }
+      case 'delete_thread': {
+        const threadId = ph(c.threadId, ctx);
+        if (!threadId) break;
+        const thread = await ctx.guild.channels.fetch(threadId).catch(() => null);
+        if (thread?.isThread?.()) await thread.delete().catch(() => {});
+        break;
+      }
+      case 'voice_move': {
+        const member = await resolveTargetMember(c, ctx);
+        const channelId = ph(c.channelId, ctx);
+        if (member?.voice?.channel && channelId) await member.voice.setChannel(channelId).catch(() => {});
+        break;
+      }
+      case 'voice_mute': {
+        const member = await resolveTargetMember(c, ctx);
+        if (member?.voice?.channel) await member.voice.setMute(c.state !== false).catch(() => {});
+        break;
+      }
+      case 'voice_deafen': {
+        const member = await resolveTargetMember(c, ctx);
+        if (member?.voice?.channel) await member.voice.setDeaf(c.state !== false).catch(() => {});
+        break;
+      }
+      case 'voice_disconnect': {
+        const member = await resolveTargetMember(c, ctx);
+        if (member?.voice?.channel) await member.voice.disconnect().catch(() => {});
+        break;
+      }
+      case 'create_invite': {
+        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
+        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
+        if (!target?.createInvite) break;
+        const invite = await target.createInvite({
+          maxUses: Number(c.maxUses) || 0,
+          maxAge: (Number(c.maxAgeMinutes) || 0) * 60,
+        }).catch(() => null);
+        if (invite && c.saveAs) ctx.vars[c.saveAs] = invite.url;
+        break;
+      }
+      case 'http_request': {
+        try {
+          const url = phText(c.url, ctx);
+          if (!url) break;
+          let headers = {};
+          if (c.headers) { try { headers = JSON.parse(phText(c.headers, ctx)); } catch {} }
+          const opts = { method: c.method || 'GET', headers };
+          if (c.body && c.method !== 'GET') opts.body = phText(c.body, ctx);
+          const res = await fetch(url, opts);
+          const text = await res.text();
+          let value = text;
+          try { value = JSON.stringify(JSON.parse(text)); } catch {}
+          if (c.saveAs) ctx.vars[c.saveAs] = value.slice(0, 3000);
+        } catch (err) { console.error('[CustomCommands] HTTP-Request Fehler:', err.message); }
+        break;
+      }
       case 'open_form': {
         if (!ctx.interaction || ctx.interactionReplied) break;
         const fields = (c.fields || []).slice(0, 5);
@@ -396,101 +444,6 @@ async function runAction(node, ctx) {
         await ctx.interaction.showModal(modal);
         ctx.interactionReplied = true;
         ctx.__paused = true;
-        break;
-      }
-
-      // ── Voice ────────────────────────────────────────────────────────
-      case 'move_member': {
-        const member = await resolveTargetMember(c, ctx);
-        const channelId = ph(c.channelId, ctx);
-        if (member?.voice?.channel && channelId) await member.voice.setChannel(channelId).catch(() => {});
-        break;
-      }
-      case 'voice_mute': {
-        const member = await resolveTargetMember(c, ctx);
-        if (member?.voice?.channel) await member.voice.setMute(c.muted !== false).catch(() => {});
-        break;
-      }
-      case 'voice_deafen': {
-        const member = await resolveTargetMember(c, ctx);
-        if (member?.voice?.channel) await member.voice.setDeaf(c.deafened !== false).catch(() => {});
-        break;
-      }
-      case 'voice_disconnect': {
-        const member = await resolveTargetMember(c, ctx);
-        if (member?.voice?.channel) await member.voice.disconnect().catch(() => {});
-        break;
-      }
-
-      // ── Kanäle & Threads ────────────────────────────────────────────
-      case 'edit_channel': {
-        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
-        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
-        if (!target) break;
-        const patch = {};
-        if (c.name) patch.name = phText(c.name, ctx).slice(0, 100);
-        if (c.topic !== undefined && c.topic !== '') patch.topic = phText(c.topic, ctx).slice(0, 1024);
-        if (c.slowmode !== undefined && c.slowmode !== '') patch.rateLimitPerUser = Math.max(0, Math.min(21600, Number(c.slowmode) || 0));
-        if (c.nsfw !== undefined) patch.nsfw = !!c.nsfw;
-        if (Object.keys(patch).length) await target.edit(patch).catch(() => {});
-        break;
-      }
-      case 'create_thread': {
-        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
-        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
-        if (!target?.threads) break;
-        const thread = await target.threads.create({
-          name: phText(c.name, ctx) || 'Neuer Thread',
-          autoArchiveDuration: Number(c.autoArchiveMinutes) || 1440,
-        }).catch(() => null);
-        if (thread && c.saveAs) ctx.vars[c.saveAs] = thread.id;
-        break;
-      }
-
-      // ── API ──────────────────────────────────────────────────────────
-      case 'http_request': {
-        const url = phText(c.url, ctx);
-        if (!url) break;
-        try {
-          const opts = { method: c.method || 'GET' };
-          if (c.headers) { try { opts.headers = JSON.parse(phText(c.headers, ctx)); } catch {} }
-          if (c.body && c.method && c.method !== 'GET' && c.method !== 'HEAD') {
-            opts.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-            opts.body = phText(c.body, ctx);
-          }
-          const res = await fetch(url, opts);
-          const text = await res.text();
-          if (c.saveAs) {
-            let val = text;
-            try { val = JSON.parse(text); val = JSON.stringify(val); } catch {}
-            ctx.vars[c.saveAs] = val;
-          }
-          if (c.saveStatusAs) ctx.vars[c.saveStatusAs] = String(res.status);
-        } catch (err) {
-          console.error('[CustomCommands] HTTP-Request Fehler:', err.message);
-          if (c.saveAs) ctx.vars[c.saveAs] = '';
-        }
-        break;
-      }
-
-      // ── Rollen & Invites ────────────────────────────────────────────
-      case 'create_role': {
-        const role = await ctx.guild.roles.create({
-          name: phText(c.name, ctx) || 'Neue Rolle',
-          color: c.color ? parseInt(c.color.replace('#', ''), 16) : undefined,
-        }).catch(() => null);
-        if (role && c.saveAs) ctx.vars[c.saveAs] = role.id;
-        break;
-      }
-      case 'create_invite': {
-        const channelId = ph(c.channelId, ctx) || ctx.channel.id;
-        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
-        if (!target?.createInvite) break;
-        const invite = await target.createInvite({
-          maxUses: Number(c.maxUses) || 0,
-          maxAge: (Number(c.maxAgeMinutes) || 0) * 60,
-        }).catch(() => null);
-        if (invite && c.saveAs) ctx.vars[c.saveAs] = invite.url;
         break;
       }
 
@@ -524,34 +477,22 @@ async function sendReply(ctx, payload) {
 async function runNode(cmd, nodeId, ctx) {
   const node = getDef(cmd.nodes, nodeId);
   if (!node) return;
-
   if (node.kind === 'condition') {
     const result = await evalCondition(node, ctx);
     const edge = findEdge(cmd.edges, node.id, result ? 'then' : 'else');
     if (edge) await runNode(cmd, edge.toNodeId, ctx);
     return;
   }
-
   let execIdCache = null;
-  ctx.__execIdFor = (n) => {
-    if (!execIdCache) execIdCache = registerPending(cmd, n, ctx);
-    return execIdCache;
-  };
-
+  ctx.__execIdFor = (n) => { if (!execIdCache) execIdCache = registerPending(cmd, n, ctx); return execIdCache; };
   await runAction(node, ctx);
-
   if (ctx.__paused) return;
-
   const edge = findEdge(cmd.edges, node.id, 'out');
   if (edge) await runNode(cmd, edge.toNodeId, ctx);
 }
 
 function makeCtx({ client, guild, member, user, channel, message, interaction, options }) {
-  return {
-    client, guild, member, user, channel, message, interaction,
-    options: options || {}, vars: {},
-    interactionReplied: false, lastMessage: null, __paused: false,
-  };
+  return { client, guild, member, user, channel, message, interaction, options: options || {}, vars: {}, interactionReplied: false, lastMessage: null, __paused: false };
 }
 
 async function executeCommand(cmd, ctx) {
@@ -571,10 +512,6 @@ function checkCooldown(cmd, userId) {
   return true;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// EINSTIEGSPUNKTE
-// ═══════════════════════════════════════════════════════════════════════
-
 async function handleSlashCommand(interaction) {
   if (!interaction.guild) return;
   const store = db.get('customcommands') || {};
@@ -582,11 +519,9 @@ async function handleSlashCommand(interaction) {
   const cmd = all.find(c => c.type === 'slash' && c.enabled !== false &&
     (c.name || '').toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 32) === interaction.commandName);
   if (!cmd) return;
-
   if (!checkCooldown(cmd, interaction.user.id)) {
     return interaction.reply({ content: '⏳ Bitte warte, bevor du diesen Command erneut benutzt.', ephemeral: true }).catch(() => {});
   }
-
   const options = {};
   for (const opt of cmd.options || []) {
     switch (opt.type) {
@@ -598,14 +533,8 @@ async function handleSlashCommand(interaction) {
       case 'boolean': options[opt.name] = interaction.options.getBoolean(opt.name) ?? undefined; break;
     }
   }
-
-  const ctx = makeCtx({
-    client: interaction.client, guild: interaction.guild, member: interaction.member,
-    user: interaction.user, channel: interaction.channel, message: null, interaction, options,
-  });
-
-  try { await executeCommand(cmd, ctx); }
-  catch (err) { console.error('[CustomCommands] Fehler bei Slash-Ausführung:', err); }
+  const ctx = makeCtx({ client: interaction.client, guild: interaction.guild, member: interaction.member, user: interaction.user, channel: interaction.channel, message: null, interaction, options });
+  try { await executeCommand(cmd, ctx); } catch (err) { console.error('[CustomCommands] Fehler bei Slash-Ausführung:', err); }
 }
 
 async function handleTextTrigger(message) {
@@ -623,16 +552,9 @@ async function handleTextTrigger(message) {
   });
   if (!matches.length) return;
   const cmd = matches[0];
-
   if (!checkCooldown(cmd, message.author.id)) return;
-
-  const ctx = makeCtx({
-    client: message.client, guild: message.guild, member: message.member,
-    user: message.author, channel: message.channel, message, interaction: null, options: {},
-  });
-
-  try { await executeCommand(cmd, ctx); }
-  catch (err) { console.error('[CustomCommands] Fehler bei Text-Trigger:', err); }
+  const ctx = makeCtx({ client: message.client, guild: message.guild, member: message.member, user: message.author, channel: message.channel, message, interaction: null, options: {} });
+  try { await executeCommand(cmd, ctx); } catch (err) { console.error('[CustomCommands] Fehler bei Text-Trigger:', err); }
 }
 
 async function handleComponentInteraction(interaction) {
@@ -640,29 +562,20 @@ async function handleComponentInteraction(interaction) {
   const p = pending.get(execId);
   if (!p) return interaction.reply({ content: '⌛ Diese Interaktion ist abgelaufen.', ephemeral: true }).catch(() => {});
   pending.delete(execId);
-
   const store = db.get('customcommands') || {};
   const all = store[p.guildId] || [];
   const cmd = all.find(c => c.id === p.cmdId);
   if (!cmd) return;
-
   let port = portRaw;
   if (interaction.isStringSelectMenu()) port = interaction.values[0];
-
   const guild = interaction.guild;
   const member = await guild.members.fetch(p.ctxData.userId).catch(() => null);
   const channel = await guild.channels.fetch(p.ctxData.channelId).catch(() => interaction.channel);
-
-  const ctx = makeCtx({
-    client: interaction.client, guild, member, user: member?.user || interaction.user,
-    channel, message: null, interaction, options: p.ctxData.options,
-  });
+  const ctx = makeCtx({ client: interaction.client, guild, member, user: member?.user || interaction.user, channel, message: null, interaction, options: p.ctxData.options });
   ctx.vars = p.ctxData.vars || {};
-
   const edge = findEdge(cmd.edges, p.nodeId, port);
   if (!edge) return interaction.reply({ content: '❌ Für diese Aktion ist kein weiterer Schritt verbunden.', ephemeral: true }).catch(() => {});
-  try { await runNode(cmd, edge.toNodeId, ctx); }
-  catch (err) { console.error('[CustomCommands] Fehler bei Component-Interaktion:', err); }
+  try { await runNode(cmd, edge.toNodeId, ctx); } catch (err) { console.error('[CustomCommands] Fehler bei Component-Interaktion:', err); }
 }
 
 async function handleModalInteraction(interaction) {
@@ -670,31 +583,23 @@ async function handleModalInteraction(interaction) {
   const p = pending.get(execId);
   if (!p) return interaction.reply({ content: '⌛ Diese Interaktion ist abgelaufen.', ephemeral: true }).catch(() => {});
   pending.delete(execId);
-
   const store = db.get('customcommands') || {};
   const all = store[p.guildId] || [];
   const cmd = all.find(c => c.id === p.cmdId);
   if (!cmd) return;
   const node = getDef(cmd.nodes, p.nodeId);
-
   const guild = interaction.guild;
   const member = await guild.members.fetch(p.ctxData.userId).catch(() => null);
   const channel = await guild.channels.fetch(p.ctxData.channelId).catch(() => interaction.channel);
-
-  const ctx = makeCtx({
-    client: interaction.client, guild, member, user: member?.user || interaction.user,
-    channel, message: null, interaction, options: p.ctxData.options,
-  });
+  const ctx = makeCtx({ client: interaction.client, guild, member, user: member?.user || interaction.user, channel, message: null, interaction, options: p.ctxData.options });
   ctx.vars = p.ctxData.vars || {};
-
   (node?.config?.fields || []).forEach((f, i) => {
     let val = '';
-    try { val = interaction.fields.getTextInputValue(`f${i}`); } catch { /* optional & leer */ }
+    try { val = interaction.fields.getTextInputValue(`f${i}`); } catch {}
     const key = (f.saveAs || f.label || `feld${i + 1}`).replace(/[^a-zA-Z0-9_]/g, '');
     ctx.options[key] = val;
     ctx.vars[key] = val;
   });
-
   const edge = findEdge(cmd.edges, p.nodeId, 'out');
   try {
     if (edge) await runNode(cmd, edge.toNodeId, ctx);
@@ -702,9 +607,4 @@ async function handleModalInteraction(interaction) {
   } catch (err) { console.error('[CustomCommands] Fehler bei Modal-Submit:', err); }
 }
 
-module.exports = {
-  handleSlashCommand,
-  handleTextTrigger,
-  handleComponentInteraction,
-  handleModalInteraction,
-};
+module.exports = { handleSlashCommand, handleTextTrigger, handleComponentInteraction, handleModalInteraction };
