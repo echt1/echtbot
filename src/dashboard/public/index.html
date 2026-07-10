@@ -1083,6 +1083,8 @@ const BLOCK_DEFS = {
     { type:'delete_var',     icon:'🗑️',  label:'Delete Variable',     desc:'Variable löschen',               color:'#5a3e8e', cat:'Variablen' },
     { type:'wait',           icon:'⏳', label:'Wait',                desc:'Warten',                       color:'#5a3e8e', cat:'Sonstiges' },
     { type:'set_status',     icon:'🎮', label:'Set Status',          desc:'Bot-Status ändern',            color:'#5a3e8e', cat:'Sonstiges' },
+    { type:'http_request',   icon:'🌐', label:'HTTP Request',        desc:'Externe API aufrufen',          color:'#7b0ea8', cat:'Sonstiges' },
+    { type:'calculate',      icon:'🧮', label:'Calculate',           desc:'Rechnen mit Variablen',         color:'#5a3e8e', cat:'Variablen' },
   ],
   conditions: [
     { type:'condition_role',       icon:'🛡️', label:'Role Condition',       desc:'User hat/hat nicht Rolle',     color:'#1e7e5a' },
@@ -1195,7 +1197,7 @@ function openEditor(){
       </svg>
       <div id="cc-nodes" style="position:absolute;top:0;left:0;transform-origin:0 0"></div>
     </div>
-    <div id="cc-cfg" style="width:290px;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;flex-shrink:0;display:none;padding:16px"></div>
+    <div id="cc-cfg" style="width:340px;background:var(--surface);border-left:1px solid var(--border);overflow-y:auto;overflow-x:hidden;flex-shrink:0;display:none;padding:16px;box-sizing:border-box"></div>
   </div>`;
 
   if(!document.getElementById('cc-sty')){
@@ -1424,6 +1426,14 @@ function idPicker(nodeId,key,label,items,extraOption){
     ${custom?`<input type="text" value="${String(val).replace(/"/g,'&quot;')}" placeholder="ID oder {var:x} / {input:x}" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:9px" oninput="CC.cmd.nodes.find(n=>n.id==='${nodeId}').config.${key}=this.value">`:''}`;
 }
 
+function insertPh(fieldId,token){
+  const el=document.getElementById(fieldId);if(!el)return;
+  const start=el.selectionStart??el.value.length,end=el.selectionEnd??el.value.length;
+  el.value=el.value.slice(0,start)+token+el.value.slice(end);
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+  el.focus();el.selectionStart=el.selectionEnd=start+token.length;
+}
+
 function renderCCCfg(nodeId){
   const panel=document.getElementById('cc-cfg');
   const node=CC.cmd.nodes.find(n=>n.id===nodeId);
@@ -1435,12 +1445,27 @@ function renderCCCfg(nodeId){
   const uopts=(CC.cmd.options||[]).filter(o=>o.type==='user').map(o=>`<option value="${o.name}">${o.name}</option>`).join('');
   const S=(tag,attrs,inner='')=>`<${tag} ${attrs}>${inner}</${tag}>`;
 
-  const inp=(key,lbl,ph='',type='text')=>
-    `<label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">${lbl}</label>
-     <input type="${type}" value="${String(c[key]||'').replace(/"/g,'&quot;')}" placeholder="${ph}" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:9px" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.${key}=this.value;renderCanvas()">`;
-  const ta=(key,lbl,ph='')=>
-    `<label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">${lbl}</label>
-     <textarea style="width:100%;min-height:65px;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);resize:vertical;font-family:inherit;font-size:.85rem;margin-bottom:4px" placeholder="${ph}" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.${key}=this.value;renderCanvas()">${c[key]||''}</textarea>${hints}`;
+  const phItems=()=>{
+    const opts=(CC.cmd.options||[]).map(o=>`{input:${o.name}}`);
+    const varNames=[...new Set(CC.cmd.nodes.filter(n=>n.type==='set_var'&&n.config?.name).map(n=>`{var:${n.config.name}}`))];
+    return ['{user}','{username}','{server}','{channel}','{date}',...opts,...varNames];
+  };
+  const phMenu=(fieldId)=>`<details style="position:relative;display:inline-block">
+    <summary style="list-style:none;cursor:pointer;color:var(--muted);font-size:.72rem;padding:1px 5px;border:1px solid var(--border);border-radius:4px;user-select:none">🏷️</summary>
+    <div style="position:absolute;right:0;top:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px;z-index:50;min-width:170px;max-width:220px;max-height:180px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4)">
+      ${phItems().map(t=>`<div style="padding:4px 6px;font-size:.76rem;cursor:pointer;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''" onclick="insertPh('${fieldId}','${t}');this.closest('details').open=false">${t}</div>`).join('')}
+    </div>
+  </details>`;
+  const inp=(key,lbl,ph='',type='text')=>{
+    const fid=`cf_${node.id}_${key}`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px"><label style="font-size:.8rem;color:var(--muted)">${lbl}</label>${phMenu(fid)}</div>
+     <input id="${fid}" type="${type}" value="${String(c[key]||'').replace(/"/g,'&quot;')}" placeholder="${ph}" style="width:100%;box-sizing:border-box;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:9px" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.${key}=this.value;renderCanvas()">`;
+  };
+  const ta=(key,lbl,ph='')=>{
+    const fid=`cf_${node.id}_${key}`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px"><label style="font-size:.8rem;color:var(--muted)">${lbl}</label>${phMenu(fid)}</div>
+     <textarea id="${fid}" style="width:100%;box-sizing:border-box;min-height:65px;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);resize:vertical;font-family:inherit;font-size:.85rem;margin-bottom:4px" placeholder="${ph}" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.${key}=this.value;renderCanvas()">${c[key]||''}</textarea>${hints}`;
+  };
   const tog=(key,lbl)=>
     `<label style="display:flex;align-items:center;gap:7px;margin-bottom:9px;font-size:.83rem;cursor:pointer"><label class="toggle"><input type="checkbox" ${c[key]?'checked':''} onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.${key}=this.checked"><span class="slider"></span></label>${lbl}</label>`;
   const rsel=()=>
@@ -1465,23 +1490,25 @@ function renderCCCfg(nodeId){
     <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
       <div style="font-size:.79rem;color:var(--muted);margin-bottom:5px">🔘 Buttons → verbinde Port für Branch</div>
       ${(node.buttons||[]).map((b,i)=>`<div style="background:var(--bg);border-radius:6px;padding:7px;margin-bottom:5px">
-        <div style="display:flex;gap:4px;margin-bottom:4px">
-          <input type="text" value="${(b.label||'').replace(/"/g,'&quot;')}" placeholder="Label" style="flex:1;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.79rem" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons[${i}].label=this.value;renderCanvas()">
-          <select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons[${i}].style=this.value" style="padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.79rem">
+        <input type="text" value="${(b.label||'').replace(/"/g,'&quot;')}" placeholder="Label" style="width:100%;box-sizing:border-box;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.79rem;margin-bottom:4px" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons[${i}].label=this.value;renderCanvas()">
+        <div style="display:flex;gap:4px">
+          <select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons[${i}].style=this.value" style="flex:1;min-width:0;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.79rem">
             ${['primary','secondary','success','danger'].map(s=>`<option value="${s}" ${b.style===s?'selected':''}>${s}</option>`).join('')}
           </select>
-          <input type="text" value="${b.emoji||''}" placeholder="😀" style="width:36px;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);text-align:center" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons[${i}].emoji=this.value;renderCanvas()">
-          <button onclick="CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons.splice(${i},1);CC.cmd.edges=CC.cmd.edges.filter(e=>!(e.fromNodeId==='${node.id}'&&e.fromPort==='btn_${i}'));selectCCNode('${node.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem">✕</button>
+          <input type="text" value="${b.emoji||''}" placeholder="😀" style="width:36px;flex-shrink:0;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);text-align:center" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons[${i}].emoji=this.value;renderCanvas()">
+          <button onclick="CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons.splice(${i},1);CC.cmd.edges=CC.cmd.edges.filter(e=>!(e.fromNodeId==='${node.id}'&&e.fromPort==='btn_${i}'));selectCCNode('${node.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;flex-shrink:0">✕</button>
         </div>
       </div>`).join('')}
       ${(node.buttons||[]).length<5?`<button class="btn btn-ghost btn-sm" style="width:100%" onclick="(CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons=CC.cmd.nodes.find(n=>n.id==='${node.id}').buttons||[]).push({id:'${uuid()}',label:'Button',style:'primary',emoji:''});selectCCNode('${node.id}')">+ Button</button>`:''}
     </div>
     <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
       <div style="font-size:.79rem;color:var(--muted);margin-bottom:5px">🔽 Select Menu → verbinde Sel-Port für Branch</div>
-      ${(node.selects||[]).map((s,i)=>`<div style="background:var(--bg);border-radius:6px;padding:7px;margin-bottom:5px;display:flex;gap:4px">
-        <input type="text" value="${(s.label||'').replace(/"/g,'&quot;')}" placeholder="Label" style="flex:1;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.79rem" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').selects[${i}].label=this.value;renderCanvas()">
-        <input type="text" value="${s.emoji||''}" placeholder="😀" style="width:34px;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);text-align:center" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').selects[${i}].emoji=this.value;renderCanvas()">
-        <button onclick="CC.cmd.nodes.find(n=>n.id==='${node.id}').selects.splice(${i},1);selectCCNode('${node.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem">✕</button>
+      ${(node.selects||[]).map((s,i)=>`<div style="background:var(--bg);border-radius:6px;padding:7px;margin-bottom:5px">
+        <input type="text" value="${(s.label||'').replace(/"/g,'&quot;')}" placeholder="Label" style="width:100%;box-sizing:border-box;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.79rem;margin-bottom:4px" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').selects[${i}].label=this.value;renderCanvas()">
+        <div style="display:flex;gap:4px">
+          <input type="text" value="${s.emoji||''}" placeholder="😀" style="width:34px;flex-shrink:0;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);text-align:center" oninput="CC.cmd.nodes.find(n=>n.id==='${node.id}').selects[${i}].emoji=this.value;renderCanvas()">
+          <button onclick="CC.cmd.nodes.find(n=>n.id==='${node.id}').selects.splice(${i},1);selectCCNode('${node.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;flex-shrink:0">✕</button>
+        </div>
       </div>`).join('')}
       ${(node.selects||[]).length<10?`<button class="btn btn-ghost btn-sm" style="width:100%" onclick="(CC.cmd.nodes.find(n=>n.id==='${node.id}').selects=CC.cmd.nodes.find(n=>n.id==='${node.id}').selects||[]).push({id:'${uuid()}',label:'Option',emoji:''});selectCCNode('${node.id}')">+ Option</button>`:''}
     </div>`;
@@ -1553,14 +1580,24 @@ function renderCCCfg(nodeId){
       case 'delete_channel':
         html+=idPicker(node.id,'channelId','Kanal',chCache[g]||[],{value:'',label:'Aktueller Kanal'});
         break;
-      case 'edit_message':
-        html+=idPicker(node.id,'channelId','Kanal',chCache[g]||[],{value:'',label:'Gleicher Channel'})+
-          inp('messageId','Message-ID der Nachricht','1234567890')+
+      case 'edit_message': {
+        const msgNodes=CC.cmd.nodes.filter(n=>['reply_text','reply_embed','send_message'].includes(n.type)&&n.id!==node.id)
+          .map(n=>({id:'node:'+n.id,name:(n.config?.content||getDef(n.type).label).slice(0,28)}));
+        html+=idPicker(node.id,'messageRef','Welche Nachricht?',msgNodes,{value:'',label:'Manuell per ID...'})+
+          (c.messageRef?'':idPicker(node.id,'channelId','Kanal (bei manueller ID)',chCache[g]||[],{value:'',label:'Gleicher Channel'})+inp('messageId','Message-ID','1234567890'))+
           inp('content','Neuer Text (optional)','Leer lassen = unverändert')+emb();
         break;
+      }
       case 'get_var':
         html+=inp('name','Globale Variable','meinVar')+inp('saveAs','Lokal speichern als (optional)','Leer = gleicher Name')+
           `<p style="color:var(--muted);font-size:.78rem">Danach nutzbar als {var:name} bzw. {var:saveAs}.</p>`;
+        break;
+      case 'calculate':
+        html+=inp('expression','Formel','{var:zahl1} + {var:zahl2} * 2')+
+          `<label style="font-size:.8rem;color:var(--muted);display:block;margin:7px 0 3px">Ergebnis speichern</label>`+
+          inp('saveAs','Variable Name','ergebnis')+
+          `<label style="font-size:.8rem;color:var(--muted);display:block;margin:7px 0 3px">Scope</label><select onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.scope=this.value" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)"><option value="local" ${c.scope!=='global'?'selected':''}>📍 Lokal</option><option value="global" ${c.scope==='global'?'selected':''}>🌐 Global</option></select>
+           <p style="color:var(--muted);font-size:.76rem;margin-top:6px">Erlaubt: Zahlen, + - * / % ( ). Platzhalter werden vorher ersetzt.</p>`;
         break;
       case 'delete_var':
         html+=inp('name','Variable Name','meinVar')+
