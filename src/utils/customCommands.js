@@ -592,49 +592,35 @@ async function handleComponentInteraction(interaction) {
   const p = pending.get(execId);
   if (!p) return interaction.reply({ content: '⌛ Diese Interaktion ist abgelaufen.', ephemeral: true }).catch(() => {});
   pending.delete(execId);
+
   const store = db.get('customcommands') || {};
   const all = store[p.guildId] || [];
   const cmd = all.find(c => c.id === p.cmdId);
   if (!cmd) return;
+
   let port = portRaw;
   if (interaction.isStringSelectMenu()) port = interaction.values[0];
-  const guild = interaction.guild;
-  const member = await guild.members.fetch(p.ctxData.userId).catch(() => null);
-  const channel = await guild.channels.fetch(p.ctxData.channelId).catch(() => interaction.channel);
-  const ctx = makeCtx({ client: interaction.client, guild, member, user: member?.user || interaction.user, channel, message: null, interaction, options: p.ctxData.options });
-  ctx.vars = p.ctxData.vars || {};
+
   const edge = findEdge(cmd.edges, p.nodeId, port);
   if (!edge) return interaction.reply({ content: '❌ Für diese Aktion ist kein weiterer Schritt verbunden.', ephemeral: true }).catch(() => {});
-  try { await runNode(cmd, edge.toNodeId, ctx); } catch (err) { console.error('[CustomCommands] Fehler bei Component-Interaktion:', err); }
-}
 
-async function handleModalInteraction(interaction) {
-  const [, execId] = interaction.customId.split('|');
-  const p = pending.get(execId);
-  if (!p) return interaction.reply({ content: '⌛ Diese Interaktion ist abgelaufen.', ephemeral: true }).catch(() => {});
-  pending.delete(execId);
-  const store = db.get('customcommands') || {};
-  const all = store[p.guildId] || [];
-  const cmd = all.find(c => c.id === p.cmdId);
-  if (!cmd) return;
-  const node = getDef(cmd.nodes, p.nodeId);
+  // Sofort bestaetigen, BEVOR die Kette laeuft - sonst laeuft die 3s-Frist
+  // ab, falls die Kette nur aus stillen Aktionen besteht.
+  await interaction.deferUpdate().catch(() => {});
+
   const guild = interaction.guild;
   const member = await guild.members.fetch(p.ctxData.userId).catch(() => null);
   const channel = await guild.channels.fetch(p.ctxData.channelId).catch(() => interaction.channel);
-  const ctx = makeCtx({ client: interaction.client, guild, member, user: member?.user || interaction.user, channel, message: null, interaction, options: p.ctxData.options });
-  ctx.vars = p.ctxData.vars || {};
-  (node?.config?.fields || []).forEach((f, i) => {
-    let val = '';
-    try { val = interaction.fields.getTextInputValue(`f${i}`); } catch {}
-    const key = (f.saveAs || f.label || `feld${i + 1}`).replace(/[^a-zA-Z0-9_]/g, '');
-    ctx.options[key] = val;
-    ctx.vars[key] = val;
+
+  const ctx = makeCtx({
+    client: interaction.client, guild, member, user: member?.user || interaction.user,
+    channel, message: null, interaction, options: p.ctxData.options,
   });
-  const edge = findEdge(cmd.edges, p.nodeId, 'out');
-  try {
-    if (edge) await runNode(cmd, edge.toNodeId, ctx);
-    else if (!ctx.interactionReplied) await interaction.reply({ content: '✅ Formular gespeichert.', ephemeral: true }).catch(() => {});
-  } catch (err) { console.error('[CustomCommands] Fehler bei Modal-Submit:', err); }
+  ctx.vars = p.ctxData.vars || {};
+  ctx.interactionReplied = true; // bereits per deferUpdate bestaetigt -> weitere Antworten laufen ueber followUp
+
+  try { await runNode(cmd, edge.toNodeId, ctx); }
+  catch (err) { console.error('[CustomCommands] Fehler bei Component-Interaktion:', err); }
 }
 
 module.exports = { handleSlashCommand, handleTextTrigger, handleComponentInteraction, handleModalInteraction };
