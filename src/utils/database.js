@@ -14,6 +14,10 @@ const FILES = {
   giveaways: path.join(DATA_DIR, 'giveaways.json'),
   j2c: path.join(DATA_DIR, 'j2c.json'),
   customcommands: path.join(DATA_DIR, 'customcommands.json'),
+  ccvars: path.join(DATA_DIR, 'ccvars.json'),
+  nominationTypes: path.join(DATA_DIR, 'nominationTypes.json'),
+  nominations: path.join(DATA_DIR, 'nominations.json'),
+};
 };
 
 function readJSON(file) {
