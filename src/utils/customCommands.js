@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// CUSTOM COMMANDS – AUSFÜHRUNGS-ENGINE (Backend) – v3
+// CUSTOM COMMANDS – AUSFÜHRUNGS-ENGINE (Backend) – v4
 // ═══════════════════════════════════════════════════════════════════════
 
 const {
@@ -74,7 +74,8 @@ function phText(str, ctx) {
     });
 }
 
-function getDef(nodes, id) { return nodes.find(n => n.id === id); }function getDef(nodes, id) { return nodes.find(n => n.id === id); }
+function getDef(nodes, id) { return nodes.find(n => n.id === id); }
+function findEdge(edges, fromNodeId, fromPort) { return edges.find(e => e.fromNodeId === fromNodeId && e.fromPort === fromPort); }
 
 // Nur Zahlen/Operatoren zulassen (Platzhalter wurden vorher schon ersetzt) -
 // verhindert, dass ueber {input:x}/{var:x} injizierter Text als Code laeuft.
@@ -87,7 +88,6 @@ function safeMath(expr) {
     return typeof result === 'number' && isFinite(result) ? result : NaN;
   } catch { return NaN; }
 }
-function findEdge(edges, fromNodeId, fromPort) { return edges.find(e => e.fromNodeId === fromNodeId && e.fromPort === fromPort); }
 
 async function resolveTargetMember(config, ctx) {
   if (config.targetInput) {
@@ -525,6 +525,7 @@ async function runNode(cmd, nodeId, ctx) {
 function makeCtx({ client, guild, member, user, channel, message, interaction, options }) {
   return { client, guild, member, user, channel, message, interaction, options: options || {}, vars: {}, interactionReplied: false, lastMessage: null, messagesByNode: {}, __paused: false };
 }
+
 async function executeCommand(cmd, ctx) {
   const trigger = cmd.nodes.find(n => n.kind === 'trigger');
   if (!trigger) return;
@@ -621,6 +622,43 @@ async function handleComponentInteraction(interaction) {
 
   try { await runNode(cmd, edge.toNodeId, ctx); }
   catch (err) { console.error('[CustomCommands] Fehler bei Component-Interaktion:', err); }
+}
+
+async function handleModalInteraction(interaction) {
+  const [, execId] = interaction.customId.split('|');
+  const p = pending.get(execId);
+  if (!p) return interaction.reply({ content: '⌛ Diese Interaktion ist abgelaufen.', ephemeral: true }).catch(() => {});
+  pending.delete(execId);
+
+  const store = db.get('customcommands') || {};
+  const all = store[p.guildId] || [];
+  const cmd = all.find(c => c.id === p.cmdId);
+  if (!cmd) return;
+  const node = getDef(cmd.nodes, p.nodeId);
+
+  const guild = interaction.guild;
+  const member = await guild.members.fetch(p.ctxData.userId).catch(() => null);
+  const channel = await guild.channels.fetch(p.ctxData.channelId).catch(() => interaction.channel);
+
+  const ctx = makeCtx({
+    client: interaction.client, guild, member, user: member?.user || interaction.user,
+    channel, message: null, interaction, options: p.ctxData.options,
+  });
+  ctx.vars = p.ctxData.vars || {};
+
+  (node?.config?.fields || []).forEach((f, i) => {
+    let val = '';
+    try { val = interaction.fields.getTextInputValue(`f${i}`); } catch {}
+    const key = (f.saveAs || f.label || `feld${i + 1}`).replace(/[^a-zA-Z0-9_]/g, '');
+    ctx.options[key] = val;
+    ctx.vars[key] = val;
+  });
+
+  const edge = findEdge(cmd.edges, p.nodeId, 'out');
+  try {
+    if (edge) await runNode(cmd, edge.toNodeId, ctx);
+    else if (!ctx.interactionReplied) await interaction.reply({ content: '✅ Formular gespeichert.', ephemeral: true }).catch(() => {});
+  } catch (err) { console.error('[CustomCommands] Fehler bei Modal-Submit:', err); }
 }
 
 module.exports = { handleSlashCommand, handleTextTrigger, handleComponentInteraction, handleModalInteraction };
