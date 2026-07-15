@@ -24,7 +24,13 @@ loadCommands(client);
 loadEvents(client);
 
 // Dashboard startet sobald Bot eingeloggt ist
-client.once('ready', () => startDashboard(client));
+client.once('ready', () => {
+  startDashboard(client);
+
+  const nominations = require('./utils/nominations');
+  nominations.initDb(require('./utils/database'));
+  nominations.startExpiryChecker(client);
+});
 
 process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
 
