@@ -18,7 +18,6 @@ const FILES = {
   nominationTypes: path.join(DATA_DIR, 'nominationTypes.json'),
   nominations: path.join(DATA_DIR, 'nominations.json'),
 };
-};
 
 function readJSON(file) {
   if (!fs.existsSync(file)) return {};
