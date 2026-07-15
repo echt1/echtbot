@@ -517,7 +517,57 @@ function startDashboard(client) {
     res.json(cmds.__globals || {});
   });
 
-    app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
+    // ── Nominations ──────────────────────────────────────────────────────
+  const nominations = require('../utils/nominations');
+  nominations.initDb(db);
+
+  app.get('/api/nominations/:gid/types', auth, (req, res) => {
+    res.json(nominations.getTypes(req.params.gid));
+  });
+
+  app.post('/api/nominations/:gid/types', auth, async (req, res) => {
+    const gid = req.params.gid;
+    const list = nominations.getTypes(gid);
+    const type = { ...req.body, id: nominations.uid(), enabled: true };
+    const discordId = await nominations.registerNominationCommand(client, gid, type);
+    if (discordId) type.discordCmdId = discordId;
+    list.push(type);
+    nominations.saveTypes(gid, list);
+    res.json({ ok: true, type });
+  });
+
+  app.put('/api/nominations/:gid/types/:id', auth, async (req, res) => {
+    const gid = req.params.gid;
+    const list = nominations.getTypes(gid);
+    const idx = list.findIndex(t => t.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Not found' });
+    const updated = { ...list[idx], ...req.body, id: req.params.id };
+    const discordId = await nominations.registerNominationCommand(client, gid, updated);
+    if (discordId) updated.discordCmdId = discordId;
+    list[idx] = updated;
+    nominations.saveTypes(gid, list);
+    res.json({ ok: true, type: updated });
+  });
+
+  app.delete('/api/nominations/:gid/types/:id', auth, (req, res) => {
+    const gid = req.params.gid;
+    const list = nominations.getTypes(gid).filter(t => t.id !== req.params.id);
+    nominations.saveTypes(gid, list);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/nominations/:gid/entries', auth, (req, res) => {
+    res.json(nominations.getNoms(req.params.gid));
+  });
+
+  app.delete('/api/nominations/:gid/entries/:id', auth, (req, res) => {
+    const gid = req.params.gid;
+    const list = nominations.getNoms(gid).filter(n => n.id !== req.params.id);
+    nominations.saveNoms(gid, list);
+    res.json({ ok: true });
+  });
+
+  app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
 }
 
 module.exports = { startDashboard };
