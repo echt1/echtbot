@@ -3,6 +3,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
         ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const db = require('../utils/database');
 const { handleSlashCommand, handleComponentInteraction, handleModalInteraction } = require('../utils/customCommands');
+const nominations = require('../utils/nominations');
 
 async function createTicketChannel(interaction, prefix, categoryLabel, formData) {
   const guildConfig = db.get('tickets');
@@ -84,6 +85,14 @@ module.exports = {
 };
 
 async function handleInteraction(interaction) {
+
+    // ── Nominations: Buttons / Formulare ─────────────────────────────────
+    if (interaction.isButton() && interaction.customId.startsWith('nom|')) {
+      return nominations.handleButton(interaction);
+    }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('nom|')) {
+      return nominations.handleModalSubmit(interaction);
+    }
 
     // ── Custom Commands: Buttons / Selects / Modals ─────────────────────
     if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith('cc|')) {
@@ -207,6 +216,9 @@ async function handleInteraction(interaction) {
       }
       // Custom Commands (falls kein built-in Command gefunden)
       await handleSlashCommand(interaction);
+      if (!interaction.replied && !interaction.deferred) {
+        await nominations.handleSlashCommand(interaction);
+      }
       return;
     }
 
