@@ -94,12 +94,13 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <div class="nav-item active" onclick="nav('overview',this)">📊 Übersicht</div>
     <div class="nav-item" onclick="nav('status',this)">🎮 Bot-Status</div>
     <div class="nav-item" onclick="nav('automod',this)">🛡️ Automod</div>
+    <div class="nav-item" onclick="nav('warnings',this)">⚠️ Verwarnungen</div>
     <div class="nav-item" onclick="nav('embed',this)">📝 Embed Builder</div>
     <div class="nav-item" onclick="nav('tickets',this)">🎫 Tickets</div>
     <div class="nav-item" onclick="nav('ticketlog',this)">📋 Ticket-Log</div>
     <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
-    <div class="nav-item" onclick="nav('warnings',this)">⚠️ Verwarnungen</div>
     <div class="nav-item" onclick="nav('cc',this)">🔧 Custom Commands</div>
+    <div class="nav-item" onclick="nav('nominations',this)">🗳️ Nominations</div>
     <div class="nav-item" onclick="nav('j2c',this)">🔊 Join2Create</div>
     <div class="nav-item" onclick="nav('settings',this)">⚙️ Einstellungen</div>
     <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border)">
@@ -241,11 +242,14 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
       </div>
     </div>
 
+    <!-- Nominations -->
+    <div id="page-nominations" class="page">
+      <h1 class="ptitle">Nominations</h1>
+      <div id="nom-content"><div class="empty">Laden...</div></div>
+    </div>
+
     <!-- J2C -->
     <div id="page-j2c" class="page">
-      <h1 class="ptitle">Join2Create Voice Channels</h1>
-      <div id="j2c-content"><div class="empty">Laden...</div></div>
-    </div>
 
     <!-- Einstellungen -->
     <div id="page-settings" class="page">
@@ -291,7 +295,7 @@ function nav(page,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if(el)el.classList.add('active');
-  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,cc:loadCC,j2c:loadJ2C,settings:loadSettings};
+  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,cc:loadCC,j2c:loadJ2C,settings:loadSettings,nominations:loadNominations};
   if(loaders[page])loaders[page]();
 }
 
@@ -1043,9 +1047,182 @@ async function delWarn(gid,uid){
 </html>
 <script>
 // ═══════════════════════════════════════════════════════════
+// NOMINATIONS
+// ═══════════════════════════════════════════════════════════
+let NOM = { gid: null, types: [], editing: null };
+
+async function loadNominations(){
+  NOM.gid = firstGuild(); if(!NOM.gid) return;
+  await loadGuildData(NOM.gid);
+  NOM.types = await api(`/api/nominations/${NOM.gid}/types`).catch(()=>[]);
+  const entries = await api(`/api/nominations/${NOM.gid}/entries`).catch(()=>[]);
+  renderNomPage(entries);
+}
+
+function renderNomPage(entries){
+  const typeRows = NOM.types.map(t=>`<tr>
+    <td><strong>/${t.commandName||'?'}</strong><div style="font-size:.78rem;color:var(--muted)">${t.name||''}</div></td>
+    <td style="color:var(--muted);font-size:.82rem">${t.thresholdMode==='count'?`${t.thresholdCount||5} Stimmen`:t.thresholdMode==='percentVotes'?`${t.thresholdPercent||50}% der Stimmen`:t.thresholdMode==='percentMembers'?`${t.thresholdPercent||50}% aller Mitglieder`:`${t.thresholdPercent||50}% einer Rolle`}</td>
+    <td style="color:var(--muted);font-size:.82rem">${t.reviewRequired?'✅ Review':'–'}</td>
+    <td><div style="display:flex;gap:6px">
+      <button class="btn btn-ghost btn-sm" data-id="${t.id}" onclick="nomEditBtn(this)">✏️</button>
+      <button class="btn btn-danger btn-sm" data-id="${t.id}" onclick="nomDeleteBtn(this)">✕</button>
+    </div></td></tr>`).join('');
+
+  const entryRows = [...entries].reverse().slice(0,50).map(n=>{
+    const type = NOM.types.find(t=>t.id===n.typeId);
+    const statusColors={pending_review:'var(--yellow)',voting:'var(--accent)',approved:'var(--green)',rejected:'var(--red)'};
+    const statusText={pending_review:'Wartet auf Review',voting:'Abstimmung läuft',approved:'Angenommen',rejected:'Abgelehnt'};
+    return `<tr>
+      <td style="font-size:.82rem;color:var(--muted)">${type?.name||n.typeId}</td>
+      <td style="font-size:.82rem">${new Date(n.createdAt).toLocaleString('de-DE')}</td>
+      <td style="color:${statusColors[n.status]||'var(--muted)'};font-size:.82rem">${statusText[n.status]||n.status}${n.overridden?' (überschrieben)':''}</td>
+      <td style="font-size:.82rem">✅ ${Object.values(n.votes||{}).filter(v=>v==='yes').length} / ❌ ${Object.values(n.votes||{}).filter(v=>v==='no').length}</td>
+      <td><button class="btn btn-danger btn-sm" data-id="${n.id}" onclick="nomEntryDeleteBtn(this)">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('nom-content').innerHTML = `
+    <div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h2 style="margin:0">Nominierungs-Typen</h2>
+        <button class="btn btn-primary btn-sm" onclick="nomNewType()">➕ Neuer Typ</button>
+      </div>
+      ${NOM.types.length?`<table><tr><th>Command</th><th>Schwelle</th><th>Review</th><th></th></tr>${typeRows}</table>`:'<div class="empty">Noch keine Typen angelegt.</div>'}
+    </div>
+    <div id="nom-form-section" class="section" style="display:none"></div>
+    <div class="section">
+      <h2>Letzte Einreichungen</h2>
+      ${entries.length?`<table><tr><th>Typ</th><th>Erstellt</th><th>Status</th><th>Stimmen</th><th></th></tr>${entryRows}</table>`:'<div class="empty">Keine Einreichungen.</div>'}
+    </div>`;
+}
+
+function nomEditBtn(btn){ nomOpenForm(NOM.types.find(t=>t.id===btn.dataset.id)); }
+function nomDeleteBtn(btn){ nomDeleteType(btn.dataset.id); }
+function nomEntryDeleteBtn(btn){ nomDeleteEntry(btn.dataset.id); }
+
+async function nomDeleteType(id){
+  if(!confirm('Typ löschen? Der Slash-Command wird ebenfalls entfernt.'))return;
+  await api(`/api/nominations/${NOM.gid}/types/${id}`,{method:'DELETE'});
+  loadNominations();
+}
+async function nomDeleteEntry(id){
+  if(!confirm('Eintrag löschen?'))return;
+  await api(`/api/nominations/${NOM.gid}/entries/${id}`,{method:'DELETE'});
+  loadNominations();
+}
+
+function nomNewType(){
+  nomOpenForm({
+    id:null, name:'', commandName:'', commandDescription:'', args:[],
+    useModal:false, modalTitle:'', modalFields:[],
+    embed:{title:'',description:'',color:'#5865f2',footer:''},
+    yesLabel:'Ja', yesStyle:'success', yesEmoji:'✅',
+    noLabel:'Nein', noStyle:'danger', noEmoji:'❌',
+    reviewRequired:false, reviewChannelId:'', reviewRoleId:'',
+    voteChannelId:'', thresholdMode:'count', thresholdCount:5,
+    thresholdPercent:50, thresholdRoleId:'', durationHours:0,
+  });
+}
+
+function nomOpenForm(type){
+  NOM.editing = JSON.parse(JSON.stringify(type));
+  const g = NOM.gid;
+  const t = NOM.editing;
+  const sec = document.getElementById('nom-form-section');
+  sec.style.display='block';
+  const set=(path,val)=>{ const keys=path.split('.'); let o=t; for(let i=0;i<keys.length-1;i++)o=o[keys[i]]=o[keys[i]]||{}; o[keys[keys.length-1]]=val; };
+  const field=(path,label,ph2='',type2='text')=>{
+    const val=path.split('.').reduce((o,k)=>o?.[k],t)||'';
+    return `<div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">${label}</label>
+      <input type="${type2}" value="${String(val).replace(/"/g,'&quot;')}" placeholder="${ph2}" style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" oninput="nomSet('${path}',this.value)"></div>`;
+  };
+  window.nomSet=(path,val)=>{ const keys=path.split('.'); let o=t; for(let i=0;i<keys.length-1;i++)o=o[keys[i]]=o[keys[i]]||{}; o[keys[keys.length-1]]=val; };
+
+  sec.innerHTML = `
+    <h2>${t.id?'Typ bearbeiten':'Neuer Nominierungs-Typ'}</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+      <div>
+        <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">Grundlagen</div>
+        ${field('name','Interner Name (nur fürs Dashboard)','z.B. SMP-Mitglied')}
+        ${field('commandName','Command-Name','nominieren')}
+        ${field('commandDescription','Command-Beschreibung','Jemanden vorschlagen')}
+        <div style="font-weight:600;font-size:.85rem;margin:14px 0 8px">Formular (Modal) statt/zusätzlich zu Argumenten</div>
+        <label style="display:flex;align-items:center;gap:7px;margin-bottom:9px;font-size:.85rem"><label class="toggle"><input type="checkbox" ${t.useModal?'checked':''} onchange="nomSet('useModal',this.checked);nomOpenForm(NOM.editing)"><span class="slider"></span></label>Formular beim Ausführen zeigen</label>
+        ${t.useModal?field('modalTitle','Formular-Titel','Nominierung'):''}
+        ${t.useModal?nomFieldListHtml():''}
+        <div style="font-weight:600;font-size:.85rem;margin:14px 0 8px">Kanäle & Rechte</div>
+        <div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Abstimmungs-Kanal</label>
+          <select style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" onchange="nomSet('voteChannelId',this.value)"><option value="">Wählen...</option>${chOptions(g,t.voteChannelId)}</select></div>
+        <label style="display:flex;align-items:center;gap:7px;margin-bottom:9px;font-size:.85rem"><label class="toggle"><input type="checkbox" ${t.reviewRequired?'checked':''} onchange="nomSet('reviewRequired',this.checked);nomOpenForm(NOM.editing)"><span class="slider"></span></label>Erst Team-Review, bevor öffentlich abgestimmt wird</label>
+        ${t.reviewRequired?`<div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Review-Kanal</label><select style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" onchange="nomSet('reviewChannelId',this.value)"><option value="">Wählen...</option>${chOptions(g,t.reviewChannelId)}</select></div>`:''}
+        <div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Review/Override-Rolle</label><select style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" onchange="nomSet('reviewRoleId',this.value)"><option value="">Wählen...</option>${roleOptions(g,t.reviewRoleId)}</select></div>
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">Embed</div>
+        ${field('embed.title','Titel','{arg:name} wurde nominiert')}
+        <div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Beschreibung</label>
+          <textarea style="width:100%;min-height:60px;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);resize:vertical" oninput="nomSet('embed.description',this.value)">${t.embed?.description||''}</textarea>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:3px">{submitter} {arg:name} {modal:name} {yes} {no} {total}</div></div>
+        <div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Farbe</label><input type="color" value="${t.embed?.color||'#5865f2'}" oninput="nomSet('embed.color',this.value)"></div>
+        ${field('embed.footer','Footer','')}
+        <div style="font-weight:600;font-size:.85rem;margin:14px 0 8px">Buttons</div>
+        <div style="display:flex;gap:8px;margin-bottom:9px">
+          <div style="flex:1">${field('yesLabel','Ja-Label','Ja')}</div>
+          <div style="flex:1">${field('yesEmoji','Emoji','✅')}</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:9px">
+          <div style="flex:1">${field('noLabel','Nein-Label','Nein')}</div>
+          <div style="flex:1">${field('noEmoji','Emoji','❌')}</div>
+        </div>
+        <div style="font-weight:600;font-size:.85rem;margin:14px 0 8px">Schwelle</div>
+        <div style="margin-bottom:9px"><select style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" onchange="nomSet('thresholdMode',this.value);nomOpenForm(NOM.editing)">
+          <option value="count" ${t.thresholdMode==='count'?'selected':''}>Feste Anzahl Ja-Stimmen</option>
+          <option value="percentVotes" ${t.thresholdMode==='percentVotes'?'selected':''}>% der abgegebenen Stimmen (nach Frist)</option>
+          <option value="percentMembers" ${t.thresholdMode==='percentMembers'?'selected':''}>% aller Server-Mitglieder (nach Frist)</option>
+          <option value="percentRole" ${t.thresholdMode==='percentRole'?'selected':''}>% einer bestimmten Rolle (nach Frist)</option>
+        </select></div>
+        ${t.thresholdMode==='count'?field('thresholdCount','Benötigte Ja-Stimmen','5','number'):field('thresholdPercent','Benötigter Prozentsatz','50','number')}
+        ${t.thresholdMode==='percentRole'?`<div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Bezugs-Rolle</label><select style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" onchange="nomSet('thresholdRoleId',this.value)"><option value="">Wählen...</option>${roleOptions(g,t.thresholdRoleId)}</select></div>`:''}
+        ${t.thresholdMode!=='count'?field('durationHours','Abstimmungsdauer (Stunden)','48','number'):''}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" onclick="nomSaveType()">💾 Speichern</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('nom-form-section').style.display='none'">Abbrechen</button>
+    </div>`;
+}
+
+function nomFieldListHtml(){
+  const t = NOM.editing;
+  t.modalFields = t.modalFields || [];
+  return `<div style="margin-bottom:9px">
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:5px">Formularfelder</div>
+    ${t.modalFields.map((f,i)=>`<div style="background:var(--bg);border-radius:6px;padding:7px;margin-bottom:5px">
+      <input type="text" value="${(f.label||'').replace(/"/g,'&quot;')}" placeholder="Feldname" style="width:100%;margin-bottom:4px;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.79rem" oninput="NOM.editing.modalFields[${i}].label=this.value">
+      <div style="display:flex;gap:4px">
+        <select style="flex:1;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.78rem" onchange="NOM.editing.modalFields[${i}].style=this.value"><option value="short" ${f.style==='short'?'selected':''}>Einzeilig</option><option value="long" ${f.style==='long'?'selected':''}>Mehrzeilig</option></select>
+        <button onclick="NOM.editing.modalFields.splice(${i},1);nomOpenForm(NOM.editing)" style="background:none;border:none;color:var(--red);cursor:pointer">✕</button>
+      </div>
+    </div>`).join('')}
+    <button class="btn btn-ghost btn-sm" style="width:100%" onclick="NOM.editing.modalFields.push({label:'',style:'short',required:true});nomOpenForm(NOM.editing)">+ Feld</button>
+  </div>`;
+}
+
+async function nomSaveType(){
+  const t = NOM.editing;
+  if(!t.commandName){ alert('Command-Name ist Pflicht.'); return; }
+  let r;
+  if(t.id) r = await api(`/api/nominations/${NOM.gid}/types/${t.id}`,{method:'PUT',body:JSON.stringify(t)});
+  else r = await api(`/api/nominations/${NOM.gid}/types`,{method:'POST',body:JSON.stringify(t)});
+  if(r?.ok){ document.getElementById('nom-form-section').style.display='none'; loadNominations(); }
+  else alert('Fehler: '+(r?.error||'Unbekannt'));
+}
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════
 // CUSTOM COMMANDS BUILDER
 // ═══════════════════════════════════════════════════════════
-
 // State
 // ═══════════════════════════════════════════════════════════════════════
 // CUSTOM COMMANDS – VISUAL NODE EDITOR
