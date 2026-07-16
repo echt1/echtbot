@@ -272,21 +272,25 @@ async function handleSlashCommand(interaction) {
     const modal = new ModalBuilder()
       .setCustomId(`nom|modal|${pendingId}`)
       .setTitle((type.modalTitle || type.name || 'Formular').slice(0, 45))
-      .addComponents(...type.modalFields.slice(0, 5).map((f, i) => new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId(`f${i}`)
+      .addComponents(...type.modalFields.slice(0, 5).map((f, i) => {
+        const input = new TextInputBuilder().setCustomId(`f${i}`)
           .setLabel((f.label || `Feld ${i + 1}`).slice(0, 45))
           .setStyle(f.style === 'long' ? TextInputStyle.Paragraph : TextInputStyle.Short)
-          .setRequired(f.required !== false)
-          .setPlaceholder((f.placeholder || '').slice(0, 100) || undefined),
-      )));
+          .setRequired(f.required !== false);
+        if (f.placeholder) input.setPlaceholder(f.placeholder.slice(0, 100));
+        return new ActionRowBuilder().addComponents(input);
+      }));
     await interaction.showModal(modal);
     return true;
   }
 
   const nom = { id: uid(), typeId: type.id, submitterId: interaction.user.id, args, modalData: {}, votes: {}, createdAt: Date.now() };
-  await postNomination(interaction.client, interaction.guild, type, nom);
+  const posted = await postNomination(interaction.client, interaction.guild, type, nom);
   const list = getNoms(interaction.guild.id); list.push(nom); saveNoms(interaction.guild.id, list);
-  await interaction.reply({ content: '✅ Deine Einreichung wurde eingereicht!', ephemeral: true }).catch(() => {});
+  await interaction.reply({
+    content: posted ? '✅ Deine Einreichung wurde eingereicht!' : '⚠️ Einreichung gespeichert, aber es konnte keine Nachricht gesendet werden - Fehler 010',
+    ephemeral: true,
+  }).catch(() => {});
   return true;
 }
 
@@ -310,9 +314,12 @@ async function handleModalSubmit(interaction) {
   });
 
   const nom = { id: uid(), typeId: type.id, submitterId: pend.submitterId, args: pend.args, modalData, votes: {}, createdAt: Date.now() };
-  await postNomination(interaction.client, interaction.guild, type, nom);
+  const posted = await postNomination(interaction.client, interaction.guild, type, nom);
   const list = getNoms(interaction.guild.id); list.push(nom); saveNoms(interaction.guild.id, list);
-  await interaction.reply({ content: '✅ Deine Einreichung wurde eingereicht!', ephemeral: true }).catch(() => {});
+  await interaction.reply({
+    content: posted ? '✅ Deine Einreichung wurde eingereicht!' : '⚠️ Einreichung gespeichert, aber es konnte keine Nachricht gesendet werden - Fehler 010',
+    ephemeral: true,
+  }).catch(() => {});
 }
 
 async function handleButton(interaction) {
