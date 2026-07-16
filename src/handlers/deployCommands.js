@@ -13,13 +13,27 @@ for (const file of commandFiles) {
   if (command.data) commands.push(command.data.toJSON());
 }
 
-const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+const rest = new REST({ rejectOnRateLimit: () => true }).setToken(process.env.DISCORD_TOKEN);
+
+const crypto = require('crypto');
 
 (async () => {
   try {
-    console.log(`Registriere ${commands.length} Slash Commands...`);
-
     if (process.env.GUILD_ID) {
+      const customStoreCheck = db.get('customcommands') || {};
+      const nomStoreCheck = db.get('nominationTypes') || {};
+      const fingerprint = crypto.createHash('md5').update(JSON.stringify({
+        commands, custom: customStoreCheck[process.env.GUILD_ID], nom: nomStoreCheck[process.env.GUILD_ID],
+      })).digest('hex');
+      const lastFingerprint = db.get('automod').__deployFingerprint;
+      if (lastFingerprint === fingerprint) {
+        console.log('Slash Commands unverändert seit letztem Deploy - überspringe Registrierung.');
+        return;
+      }
+    }
+    console.log(`Registriere ${commands.length} Slash Commands...`);
+    if (process.env.GUILD_ID) {
+
       // Custom Commands aus dem Dashboard einsammeln, damit der Bulk-Overwrite
       // sie NICHT löscht (Discord ersetzt bei PUT die komplette Command-Liste!)
       const customStore  = db.get('customcommands') || {};
@@ -71,6 +85,11 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
         db.set('nominationTypes', nomStore);
       }
       console.log(`Commands für Guild ${process.env.GUILD_ID} registriert (inkl. ${customBodies.length} Custom Command(s) und ${nomBodies.length} Nomination(s)).`);
+      const amCfg = db.get('automod');
+      amCfg.__deployFingerprint = crypto.createHash('md5').update(JSON.stringify({
+        commands, custom: customStoreCheck[process.env.GUILD_ID], nom: nomStoreCheck[process.env.GUILD_ID],
+      })).digest('hex');
+      db.set('automod', amCfg);
     } else {
       // Global - dauert bis zu 1h bis Discord sie überall ausrollt
       await rest.put(
