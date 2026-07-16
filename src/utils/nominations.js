@@ -363,6 +363,15 @@ async function handleButton(interaction) {
       await resolveNomination(interaction.client, interaction.guild, type, nom, 'rejected', interaction.user.id);
     } else {
       await moveToVoting(interaction.client, interaction.guild, type, nom);
+      if (!nom.channelId || !nom.messageId) {
+        // moveToVoting konnte nichts posten (z.B. kein Abstimmungs-Kanal gesetzt)
+        const embed = buildNomEmbed(nom, type, 'voting');
+        await interaction.message.edit({ embeds: [embed], components: [buildReviewRow(nom)] }).catch(() => {});
+        console.warn('[Nominations] Konnte Abstimmung nicht posten - fehlt der Abstimmungs-Kanal im Dashboard?');
+      } else {
+        const embed = buildNomEmbed(nom, type, 'voting');
+        await interaction.message.edit({ embeds: [embed], components: [] }).catch(() => {});
+      }
     }
     saveNoms(interaction.guild.id, list);
     return;
