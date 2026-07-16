@@ -157,13 +157,17 @@ async function postNomination(client, guild, type, nom) {
   const status = type.reviewRequired ? 'pending_review' : 'voting';
   nom.status = status;
   const channelId = status === 'pending_review' ? type.reviewChannelId : type.voteChannelId;
-  const channel = channelId ? await guild.channels.fetch(channelId).catch(() => null) : null;
+  console.log(`[Nom-Debug] postNomination: status=${status} channelId=${channelId} typeId=${type.id} reviewChannelId=${type.reviewChannelId} voteChannelId=${type.voteChannelId}`);
+  if (!channelId) { console.warn('[Nom-Debug] Keine channelId im type-Objekt - Feld ist leer/undefined!'); return null; }
+  const channel = await guild.channels.fetch(channelId).catch(err => { console.warn('[Nom-Debug] guild.channels.fetch FEHLGESCHLAGEN:', err.message); return null; });
   if (!channel) return null;
+  console.log(`[Nom-Debug] Channel gefunden: #${channel.name} (${channel.id})`);
 
   const embed = buildNomEmbed(nom, type);
   const row = status === 'pending_review' ? buildReviewRow(nom) : buildVoteRow(nom, type);
-  const msg = await channel.send({ embeds: [embed], components: [row] }).catch(() => null);
+  const msg = await channel.send({ embeds: [embed], components: [row] }).catch(err => { console.warn('[Nom-Debug] channel.send FEHLGESCHLAGEN:', err.message); return null; });
   if (!msg) return null;
+  console.log('[Nom-Debug] Nachricht erfolgreich gesendet:', msg.id);
 
   nom.messageId = msg.id;
   nom.channelId = channel.id;
@@ -175,12 +179,15 @@ async function postNomination(client, guild, type, nom) {
 
 async function moveToVoting(client, guild, type, nom) {
   nom.status = 'voting';
-  const channel = type.voteChannelId ? await guild.channels.fetch(type.voteChannelId).catch(() => null) : null;
+  console.log(`[Nom-Debug] moveToVoting: voteChannelId=${type.voteChannelId} typeId=${type.id}`);
+  if (!type.voteChannelId) { console.warn('[Nom-Debug] moveToVoting: voteChannelId ist leer!'); return; }
+  const channel = await guild.channels.fetch(type.voteChannelId).catch(err => { console.warn('[Nom-Debug] moveToVoting fetch FEHLGESCHLAGEN:', err.message); return null; });
   if (!channel) return;
+  console.log(`[Nom-Debug] moveToVoting Channel gefunden: #${channel.name}`);
   const embed = buildNomEmbed(nom, type);
   const row = buildVoteRow(nom, type);
-  const msg = await channel.send({ embeds: [embed], components: [row] }).catch(() => null);
-  if (msg) { nom.messageId = msg.id; nom.channelId = channel.id; }
+  const msg = await channel.send({ embeds: [embed], components: [row] }).catch(err => { console.warn('[Nom-Debug] moveToVoting send FEHLGESCHLAGEN:', err.message); return null; });
+  if (msg) { nom.messageId = msg.id; nom.channelId = channel.id; console.log('[Nom-Debug] moveToVoting erfolgreich gesendet:', msg.id); }
   if (type.durationHours && type.thresholdMode !== 'count') {
     nom.votingEndsAt = Date.now() + Number(type.durationHours) * 3600_000;
   }
