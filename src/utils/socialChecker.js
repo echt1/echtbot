@@ -51,7 +51,7 @@ async function checkYouTube(entry) {
     name: authorName,
     title: latest.title,
     url: `https://www.youtube.com/watch?v=${videoId}`,
-    thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
     channelIcon,
     color: 0xFF0000,
     kind: 'youtube',
