@@ -1147,6 +1147,8 @@ function nomOpenForm(type){
         ${field('name','Interner Name (nur fürs Dashboard)','z.B. SMP-Mitglied')}
         ${field('commandName','Command-Name','nominieren')}
         ${field('commandDescription','Command-Beschreibung','Jemanden vorschlagen')}
+        <div style="font-weight:600;font-size:.85rem;margin:14px 0 8px">Command-Argumente (z.B. /nominieren name:...)</div>
+        ${nomArgsListHtml()}
         <div style="font-weight:600;font-size:.85rem;margin:14px 0 8px">Formular (Modal) statt/zusätzlich zu Argumenten</div>
         <label style="display:flex;align-items:center;gap:7px;margin-bottom:9px;font-size:.85rem"><label class="toggle"><input type="checkbox" ${t.useModal?'checked':''} onchange="nomSet('useModal',this.checked);nomOpenForm(NOM.editing)"><span class="slider"></span></label>Formular beim Ausführen zeigen</label>
         ${t.useModal?field('modalTitle','Formular-Titel','Nominierung'):''}
@@ -1163,7 +1165,11 @@ function nomOpenForm(type){
         ${field('embed.title','Titel','{arg:name} wurde nominiert')}
         <div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Beschreibung</label>
           <textarea style="width:100%;min-height:60px;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);resize:vertical" oninput="nomSet('embed.description',this.value)">${t.embed?.description||''}</textarea>
-          <div style="font-size:.72rem;color:var(--muted);margin-top:3px">{submitter} {arg:name} {modal:name} {yes} {no} {total}</div></div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:3px">
+            Verfügbar: {submitter} {yes} {no} {total}
+            ${(t.args||[]).filter(a=>a.name).map(a=>` {arg:${a.name}}`).join('')}
+            ${(t.modalFields||[]).filter(f=>f.label).map(f=>` {modal:${f.label.replace(/[^a-zA-Z0-9_]/g,'')}}`).join('')}
+          </div></div>
         <div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Farbe</label><input type="color" value="${t.embed?.color||'#5865f2'}" oninput="nomSet('embed.color',this.value)"></div>
         ${field('embed.footer','Footer','')}
         <div style="font-weight:600;font-size:.85rem;margin:14px 0 8px">Buttons</div>
@@ -1191,6 +1197,25 @@ function nomOpenForm(type){
       <button class="btn btn-primary" onclick="nomSaveType()">💾 Speichern</button>
       <button class="btn btn-ghost" onclick="document.getElementById('nom-form-section').style.display='none'">Abbrechen</button>
     </div>`;
+}
+
+function nomArgsListHtml(){
+  const t = NOM.editing;
+  t.args = t.args || [];
+  return `<div style="margin-bottom:9px">
+    ${t.args.map((a,i)=>`<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px">
+      <div style="display:flex;gap:5px;margin-bottom:5px">
+        <input type="text" value="${(a.name||'').replace(/"/g,'&quot;')}" placeholder="name" style="flex:1;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.8rem" oninput="NOM.editing.args[${i}].name=this.value">
+        <select onchange="NOM.editing.args[${i}].type=this.value" style="padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.8rem">
+          ${['text','number','user','channel','role','boolean'].map(ty=>`<option value="${ty}" ${a.type===ty?'selected':''}>${ty}</option>`).join('')}
+        </select>
+        <button onclick="NOM.editing.args.splice(${i},1);nomOpenForm(NOM.editing)" style="background:none;border:none;color:var(--red);cursor:pointer">✕</button>
+      </div>
+      <input type="text" value="${(a.description||'').replace(/"/g,'&quot;')}" placeholder="Beschreibung" style="width:100%;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.78rem;margin-bottom:4px" oninput="NOM.editing.args[${i}].description=this.value">
+      <label style="font-size:.77rem;color:var(--muted);display:flex;align-items:center;gap:5px"><input type="checkbox" ${a.required?'checked':''} onchange="NOM.editing.args[${i}].required=this.checked"> Pflichtfeld</label>
+    </div>`).join('')}
+    <button class="btn btn-ghost btn-sm" style="width:100%" onclick="NOM.editing.args.push({name:'arg'+(NOM.editing.args.length+1),type:'text',description:'',required:false});nomOpenForm(NOM.editing)">+ Argument hinzufügen</button>
+  </div>`;
 }
 
 function nomFieldListHtml(){
