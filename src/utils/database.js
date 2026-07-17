@@ -17,6 +17,7 @@ const FILES = {
   ccvars: path.join(DATA_DIR, 'ccvars.json'),
   nominationTypes: path.join(DATA_DIR, 'nominationTypes.json'),
   nominations: path.join(DATA_DIR, 'nominations.json'),
+  linkedroles: path.join(DATA_DIR, 'linkedroles.json'),
 };
 
 function readJSON(file) {
