@@ -601,6 +601,21 @@ async function loadAutomod(){
             </select>
           </div>
           <div>
+            <div style="font-size:.88rem;color:var(--muted);margin-bottom:6px">🪤 Spam-Falle: Kanäle, in denen JEDE Nachricht sofort geahndet wird</div>
+            <select multiple style="width:100%;height:90px;padding:4px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text)" onchange="patchAm('${gid}',{trapChannels:[...this.selectedOptions].map(o=>o.value)})">
+              ${(chCache[gid]||[]).map(ch=>`<option value="${ch.id}" ${(cfg.trapChannels||[]).includes(ch.id)?'selected':''}>#${ch.name}</option>`).join('')}
+            </select>
+            <div class="row" style="margin-top:8px">
+              <label>Aktion</label>
+              <select onchange="patchAm('${gid}',{trapAction:this.value})">
+                <option value="mute" ${cfg.trapAction==='mute'?'selected':''}>Muten</option>
+                <option value="kick" ${cfg.trapAction==='kick'?'selected':''}>Kicken</option>
+                <option value="ban" ${(cfg.trapAction||'ban')==='ban'?'selected':''}>Bannen</option>
+              </select>
+              ${cfg.trapAction==='mute'?`<label>Dauer (Min)</label><input type="number" value="${(cfg.trapMuteDurationMs||600000)/60000}" style="width:80px" onchange="patchAm('${gid}',{trapMuteDurationMs:parseInt(this.value)*60000})">`:''}
+            </div>
+          </div>
+          <div>
             <div style="font-size:.88rem;color:var(--muted);margin-bottom:6px">Ausgeschlossene Rollen (kein Automod)</div>
             <div class="tag-cloud" id="excl-role-cloud">${(cfg.excludedRoles||[]).map(id=>{const r=(roleCache[gid]||[]).find(r=>r.id===id);return r?`<span class="tag">${r.name}<span class="x" data-gid="${gid}" data-rid="${id}" onclick="removeExclRole(this)">✕</span></span>`:''}).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Ausnahmen</span>'}</div>
             <div class="row" style="margin-top:8px">
