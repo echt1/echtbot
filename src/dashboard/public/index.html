@@ -1494,16 +1494,16 @@ function getPortPos(node,port){
 function bz(x1,y1,x2,y2){const d=Math.max(Math.abs(y2-y1)*0.5,50);return`M${x1} ${y1} C${x1} ${y1+d} ${x2} ${y2-d} ${x2} ${y2}`;}
 
 function getPortPosDOM(nodeId,port){
-  const node=CC.cmd.nodes.find(n=>n.id===nodeId);
-  if(!node)return{x:0,y:0};
+  const wrap=document.getElementById('cc-canvas-wrap');
+  const wrapRect=wrap.getBoundingClientRect();
   const portEl=document.querySelector(`.ccport[data-nid="${nodeId}"][data-port="${port}"]`);
-  const nodeEl=document.getElementById('ccn_'+nodeId);
-  if(!portEl||!nodeEl)return getPortPos(node,port);
-  const nr=nodeEl.getBoundingClientRect(),pr=portEl.getBoundingClientRect();
-  return{
-    x:node.x+(pr.left+pr.width/2-nr.left)/CC.zoom,
-    y:node.y+(pr.top+pr.height/2-nr.top)/CC.zoom,
-  };
+  if(!portEl){
+    const node=CC.cmd.nodes.find(n=>n.id===nodeId);
+    if(!node)return{x:0,y:0};
+    return{x:node.x*CC.zoom+CC.pan.x,y:node.y*CC.zoom+CC.pan.y};
+  }
+  const pr=portEl.getBoundingClientRect();
+  return{x:pr.left+pr.width/2-wrapRect.left,y:pr.top+pr.height/2-wrapRect.top};
 }
 
 function renderCanvas(){
@@ -1512,8 +1512,8 @@ function renderCanvas(){
   if(!nodesEl||!edgesEl)return;
   const tr=`translate(${CC.pan.x}px,${CC.pan.y}px) scale(${CC.zoom})`;
   nodesEl.style.transform=tr;
-  document.getElementById('cc-edges').parentElement.setAttribute('transform',`translate(${CC.pan.x},${CC.pan.y}) scale(${CC.zoom})`);
-  document.getElementById('cc-temp-line').parentElement.setAttribute('transform',`translate(${CC.pan.x},${CC.pan.y}) scale(${CC.zoom})`);
+  document.getElementById('cc-edges').parentElement.removeAttribute('transform');
+  document.getElementById('cc-temp-line').parentElement.removeAttribute('transform');
 
   nodesEl.innerHTML=CC.cmd.nodes.map(n=>renderCCNode(n)).join('');
   edgesEl.innerHTML=CC.cmd.edges.map(e=>{
@@ -1585,7 +1585,7 @@ function ccMM(e){
   if(CC.dragging){const n=CC.cmd.nodes.find(n=>n.id===CC.dragging.id);if(n){n.x=CC.dragging.nx+(e.clientX-CC.dragging.sx)/CC.zoom;n.y=CC.dragging.ny+(e.clientY-CC.dragging.sy)/CC.zoom;renderCanvas();}return;}
   if(CC.connecting){
     const wrap=document.getElementById('cc-canvas-wrap');const rect=wrap.getBoundingClientRect();
-    const mx=(e.clientX-rect.left-CC.pan.x)/CC.zoom,my=(e.clientY-rect.top-CC.pan.y)/CC.zoom;
+    const mx=e.clientX-rect.left,my=e.clientY-rect.top;
     document.getElementById('cc-temp-line').innerHTML=`<path d="${bz(CC.connecting.x,CC.connecting.y,mx,my)}" fill="none" stroke="#5865f2" stroke-width="1.5" stroke-dasharray="5,3"/>`;
   }
 }
