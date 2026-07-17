@@ -100,6 +100,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <div class="nav-item" onclick="nav('ticketlog',this)">📋 Ticket-Log</div>
     <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
     <div class="nav-item" onclick="nav('cc',this)">🔧 Custom Commands</div>
+    <div class="nav-item" onclick="nav('linkedroles',this)">🔗 Linked Roles</div>
     <div class="nav-item" onclick="nav('nominations',this)">🗳️ Nominations</div>
     <div class="nav-item" onclick="nav('j2c',this)">🔊 Join2Create</div>
     <div class="nav-item" onclick="nav('settings',this)">⚙️ Einstellungen</div>
@@ -242,6 +243,13 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
       </div>
     </div>
 
+    <!-- Linked Roles -->
+    <div id="page-linkedroles" class="page">
+      <h1 class="ptitle">Linked Roles</h1>
+      <p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">Automatische Rollen: wer mindestens eine der Quell-Rollen hat, bekommt automatisch die Ziel-Rolle. Verliert er alle Quell-Rollen, wird die Ziel-Rolle wieder entfernt.</p>
+      <div id="linkedroles-content"><div class="empty">Laden...</div></div>
+    </div>
+
     <!-- Nominations -->
     <div id="page-nominations" class="page">
       <h1 class="ptitle">Nominations</h1>
@@ -295,7 +303,7 @@ function nav(page,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if(el)el.classList.add('active');
-  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,cc:loadCC,j2c:loadJ2C,settings:loadSettings,nominations:loadNominations};
+  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,cc:loadCC,j2c:loadJ2C,settings:loadSettings,nominations:loadNominations,linkedroles:loadLinkedRoles};
   if(loaders[page])loaders[page]();
 }
 
@@ -1063,8 +1071,104 @@ async function delWarn(gid,uid){
 </html>
 <script>
 // ═══════════════════════════════════════════════════════════
+// LINKED ROLES
+// ═══════════════════════════════════════════════════════════
+let LR = { gid: null, rules: [] };
+
+async function loadLinkedRoles(){
+  LR.gid = firstGuild(); if(!LR.gid) return;
+  await loadGuildData(LR.gid);
+  LR.rules = await api(`/api/linkedroles/${LR.gid}`).catch(()=>[]);
+  renderLinkedRoles();
+}
+
+function renderLinkedRoles(){
+  const g = LR.gid;
+  const rows = LR.rules.map(r=>{
+    const sourceNames = (r.sourceRoleIds||[]).map(id=>(roleCache[g]||[]).find(x=>x.id===id)?.name||id).join(', ');
+    const targetName = (roleCache[g]||[]).find(x=>x.id===r.targetRoleId)?.name || r.targetRoleId;
+    return `<tr>
+      <td><strong>${r.name||'Unbenannt'}</strong></td>
+      <td style="font-size:.82rem;color:var(--muted)">${sourceNames||'–'}</td>
+      <td style="font-size:.82rem">→ ${targetName}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-id="${r.id}" onclick="lrSyncBtn(this)">🔄 Sync</button>
+        <button class="btn btn-danger btn-sm" data-id="${r.id}" onclick="lrDeleteBtn(this)">✕</button>
+      </div></td></tr>`;
+  }).join('');
+
+  document.getElementById('linkedroles-content').innerHTML = `
+    <div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h2 style="margin:0">Regeln</h2>
+        <button class="btn btn-primary btn-sm" onclick="lrNew()">➕ Neue Regel</button>
+      </div>
+      ${LR.rules.length?`<table><tr><th>Name</th><th>Quell-Rollen (mind. eine)</th><th>Ziel-Rolle</th><th></th></tr>${rows}</table>`:'<div class="empty">Noch keine Regeln.</div>'}
+    </div>
+    <div id="lr-form-section" class="section" style="display:none"></div>`;
+}
+
+function lrSyncBtn(btn){ lrSync(btn.dataset.id); }
+function lrDeleteBtn(btn){ lrDelete(btn.dataset.id); }
+
+async function lrDelete(id){
+  if(!confirm('Regel löschen? (Bereits vergebene Rollen bleiben bestehen, bis manuell entfernt.)'))return;
+  await api(`/api/linkedroles/${LR.gid}/${id}`,{method:'DELETE'});
+  loadLinkedRoles();
+}
+async function lrSync(id){
+  const btn = event.target;
+  btn.textContent='⏳...'; btn.disabled=true;
+  const r = await api(`/api/linkedroles/${LR.gid}/${id}/sync`,{method:'POST'});
+  alert(r.ok ? `✅ Fertig. ${r.changed} Mitglied(er) aktualisiert.` : 'Fehler: '+(r.error||'Unbekannt'));
+  loadLinkedRoles();
+}
+
+function lrNew(){
+  lrOpenForm({ id:null, name:'', sourceRoleIds:[], targetRoleId:'' });
+}
+
+function lrOpenForm(rule){
+  LR.editing = JSON.parse(JSON.stringify(rule));
+  const g = LR.gid;
+  const r = LR.editing;
+  const sec = document.getElementById('lr-form-section');
+  sec.style.display='block';
+  sec.innerHTML = `
+    <h2>${r.id?'Regel bearbeiten':'Neue Regel'}</h2>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;max-width:500px">
+      <div><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Name (nur intern)</label>
+        <input type="text" value="${(r.name||'').replace(/"/g,'&quot;')}" placeholder="z.B. Berechtigungen-Trenner" style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" oninput="LR.editing.name=this.value"></div>
+      <div><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Quell-Rollen (mindestens EINE davon nötig, Strg=Mehrfachauswahl)</label>
+        <select multiple style="width:100%;height:130px;padding:4px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" onchange="LR.editing.sourceRoleIds=[...this.selectedOptions].map(o=>o.value)">
+          ${(roleCache[g]||[]).map(role=>`<option value="${role.id}" ${(r.sourceRoleIds||[]).includes(role.id)?'selected':''}>${role.name}</option>`).join('')}
+        </select></div>
+      <div><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Ziel-Rolle (wird automatisch vergeben/entfernt)</label>
+        <select style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" onchange="LR.editing.targetRoleId=this.value">
+          <option value="">Wählen...</option>${roleOptions(g,r.targetRoleId)}
+        </select></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" onclick="lrSaveRule()">💾 Speichern</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('lr-form-section').style.display='none'">Abbrechen</button>
+    </div>`;
+}
+
+async function lrSaveRule(){
+  const r = LR.editing;
+  if(!r.sourceRoleIds?.length || !r.targetRoleId){ alert('Mindestens eine Quell-Rolle und eine Ziel-Rolle sind Pflicht.'); return; }
+  let res;
+  if(r.id) res = await api(`/api/linkedroles/${LR.gid}/${r.id}`,{method:'PUT',body:JSON.stringify(r)});
+  else res = await api(`/api/linkedroles/${LR.gid}`,{method:'POST',body:JSON.stringify(r)});
+  if(res?.ok){ document.getElementById('lr-form-section').style.display='none'; loadLinkedRoles(); }
+  else alert('Fehler: '+(res?.error||'Unbekannt'));
+}
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════
 // NOMINATIONS
 // ═══════════════════════════════════════════════════════════
+
 let NOM = { gid: null, types: [], editing: null };
 
 async function loadNominations(){
