@@ -83,6 +83,8 @@ function buildNomEmbed(nom, type, statusOverride) {
     .setTitle(fillTemplate(type.embed?.title, nom, type) || type.name)
     .setDescription(fillTemplate(type.embed?.description, nom, type)?.replace(/\\n/g, '\n') || null);
   if (type.embed?.footer) embed.setFooter({ text: fillTemplate(type.embed.footer, nom, type) });
+  if (type.embed?.imageUrl) { const u = fillTemplate(type.embed.imageUrl, nom, type); if (u) embed.setImage(u); }
+  if (type.embed?.thumbnailUrl) { const u = fillTemplate(type.embed.thumbnailUrl, nom, type); if (u) embed.setThumbnail(u); }
   embed.addFields({ name: 'Stimmen', value: `✅ ${yes}   ❌ ${no}`, inline: true });
   const status = statusOverride || nom.status;
   const statusText = { pending_review: '🕓 Wartet auf Review', voting: '🗳️ Abstimmung läuft',
