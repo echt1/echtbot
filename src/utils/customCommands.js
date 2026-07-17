@@ -429,6 +429,18 @@ async function runAction(node, ctx) {
         if (member?.voice?.channel) await member.voice.disconnect().catch(() => {});
         break;
       }
+      case 'edit_voice_channel': {
+        const channelId = ph(c.channelId, ctx);
+        if (!channelId) break;
+        const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
+        if (!target) break;
+        const payload = {};
+        if (c.name) payload.name = phText(c.name, ctx).slice(0, 100);
+        if (c.userLimit !== undefined && c.userLimit !== '') payload.userLimit = Math.max(0, Math.min(99, Number(c.userLimit) || 0));
+        if (c.bitrate !== undefined && c.bitrate !== '') payload.bitrate = Math.max(8000, Math.min(96000, Number(c.bitrate) || 64000));
+        if (Object.keys(payload).length) await target.edit(payload).catch(() => {});
+        break;
+      }
       case 'create_invite': {
         const channelId = ph(c.channelId, ctx) || ctx.channel.id;
         const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
