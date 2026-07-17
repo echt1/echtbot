@@ -1173,6 +1173,8 @@ function nomOpenForm(type){
           </div></div>
         <div style="margin-bottom:9px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Farbe</label><input type="color" value="${t.embed?.color||'#5865f2'}" oninput="nomSet('embed.color',this.value)"></div>
         ${field('embed.footer','Footer','')}
+        ${field('embed.imageUrl','Bild-URL (groß, optional)','https://... oder {arg:name} falls Bild-Argument')}
+        ${field('embed.thumbnailUrl','Thumbnail-URL (klein, optional)','https://...')}
         <div style="font-weight:600;font-size:.85rem;margin:14px 0 8px">Buttons</div>
         <div style="display:flex;gap:8px;margin-bottom:9px">
           <div style="flex:1">${field('yesLabel','Ja-Label','Ja')}</div>
