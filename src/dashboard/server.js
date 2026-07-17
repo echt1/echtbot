@@ -574,6 +574,60 @@ function startDashboard(client) {
     res.json({ ok: true });
   });
 
+  // ── Linked Roles ─────────────────────────────────────────────────────
+  app.get('/api/linkedroles/:gid', auth, (req, res) => {
+    const store = db.get('linkedroles') || {};
+    res.json(store[req.params.gid] || []);
+  });
+
+  app.post('/api/linkedroles/:gid', auth, (req, res) => {
+    const store = db.get('linkedroles') || {};
+    const gid = req.params.gid;
+    const rule = { ...req.body, id: randomUUID().slice(0, 8) };
+    store[gid] = store[gid] || [];
+    store[gid].push(rule);
+    db.set('linkedroles', store);
+    res.json({ ok: true, rule });
+  });
+
+  app.put('/api/linkedroles/:gid/:id', auth, (req, res) => {
+    const store = db.get('linkedroles') || {};
+    const gid = req.params.gid;
+    const idx = (store[gid] || []).findIndex(r => r.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Not found' });
+    store[gid][idx] = { ...store[gid][idx], ...req.body, id: req.params.id };
+    db.set('linkedroles', store);
+    res.json({ ok: true, rule: store[gid][idx] });
+  });
+
+  app.delete('/api/linkedroles/:gid/:id', auth, (req, res) => {
+    const store = db.get('linkedroles') || {};
+    const gid = req.params.gid;
+    store[gid] = (store[gid] || []).filter(r => r.id !== req.params.id);
+    db.set('linkedroles', store);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/linkedroles/:gid/:id/sync', auth, async (req, res) => {
+    const store = db.get('linkedroles') || {};
+    const gid = req.params.gid;
+    const rule = (store[gid] || []).find(r => r.id === req.params.id);
+    if (!rule) return res.status(404).json({ error: 'Not found' });
+    const g = client.guilds.cache.get(gid);
+    if (!g) return res.status(404).json({ error: 'Guild not found' });
+    try {
+      await g.members.fetch();
+      let changed = 0;
+      for (const [, member] of g.members.cache) {
+        const hasSource = rule.sourceRoleIds.some(id => member.roles.cache.has(id));
+        const hasTarget = member.roles.cache.has(rule.targetRoleId);
+        if (hasSource && !hasTarget) { await member.roles.add(rule.targetRoleId).catch(() => {}); changed++; }
+        else if (!hasSource && hasTarget) { await member.roles.remove(rule.targetRoleId).catch(() => {}); changed++; }
+      }
+      res.json({ ok: true, changed });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
 }
 
