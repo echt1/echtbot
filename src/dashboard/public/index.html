@@ -261,7 +261,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
 </div>
 
 <script>
-let TOKEN='', guilds={}, chCache={}, roleCache={}, catFormFields=[];
+let TOKEN='', guilds={}, chCache={}, roleCache={}, vcCache={}, catFormFields=[];
 
 function doLogin(){
   TOKEN=document.getElementById('token-input').value.trim();
@@ -307,6 +307,7 @@ async function init(){
 async function loadGuildData(gid){
   if(!chCache[gid])chCache[gid]=await api(`/api/guilds/${gid}/channels`).catch(()=>[]);
   if(!roleCache[gid])roleCache[gid]=await api(`/api/guilds/${gid}/roles`).catch(()=>[]);
+  if(!vcCache[gid])vcCache[gid]=await api(`/api/guilds/${gid}/voicechannels`).catch(()=>[]);
 }
 function chName(gid,id){const c=(chCache[gid]||[]).find(c=>c.id===id);return c?`#${c.name}`:id;}
 function chOptions(gid,sel=''){return(chCache[gid]||[]).map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>#${c.name}</option>`).join('');}
@@ -1292,6 +1293,7 @@ const BLOCK_DEFS = {
     { type:'voice_deafen',   icon:'🔈', label:'Server-Deafen',      desc:'User server-deafen/undeafen',   color:'#16a085', cat:'Voice' },
     { type:'voice_disconnect',icon:'📵',label:'Voice Disconnect',   desc:'User aus VC werfen',            color:'#16a085', cat:'Voice' },
     { type:'edit_channel',   icon:'🛠️', label:'Edit Channel',        desc:'Name/Topic/Slowmode ändern',    color:'#5a3e8e', cat:'Kanäle' },
+    { type:'edit_voice_channel', icon:'🔊', label:'Edit Voice Channel', desc:'User-Limit/Bitrate ändern', color:'#16a085', cat:'Voice' },
     { type:'create_thread',  icon:'🧵', label:'Create Thread',       desc:'Thread erstellen',              color:'#5a3e8e', cat:'Kanäle' },
     { type:'delete_thread',  icon:'🧵', label:'Delete Thread',       desc:'Thread löschen',                color:'#c0392b', cat:'Kanäle' },
     { type:'create_invite',  icon:'🔗', label:'Create Invite',       desc:'Server-Einladung erstellen',    color:'#5a3e8e', cat:'Kanäle' },
@@ -1906,8 +1908,14 @@ function renderCCCfg(nodeId){
         break;
       }
       case 'move_member':
-        html+=rsel()+idPicker(node.id,'channelId','Ziel-Voice-Channel (ID)',[],{value:'',label:'Wählen...'})+
-          `<p style="color:var(--muted);font-size:.78rem">Voice-Channels erscheinen nicht in der Liste - ID einfügen (Rechtsklick auf den Channel in Discord → ID kopieren).</p>`;
+        html+=rsel()+idPicker(node.id,'channelId','Ziel-Voice-Channel',vcCache[g]||[],{value:'',label:'Wählen...'});
+        break;
+      case 'edit_voice_channel':
+        html+=idPicker(node.id,'channelId','Voice-Channel',vcCache[g]||[],{value:'',label:'Wählen...'})+
+          inp('name','Neuer Name (optional)','Leer = unverändert')+
+          inp('userLimit','User-Limit (0-99, optional)','0','number')+
+          inp('bitrate','Bitrate in bps (optional, z.B. 64000)','64000','number')+
+          `<p style="color:var(--muted);font-size:.76rem">Beitritts-Berechtigungen (wer joinen darf) lassen sich aktuell nicht per Custom Command ändern - das wäre ein größeres separates Feature. Sag Bescheid falls gewünscht.</p>`;
         break;
       case 'voice_mute':
         html+=rsel()+`<label style="display:flex;align-items:center;gap:7px;margin-bottom:9px;font-size:.83rem"><label class="toggle"><input type="checkbox" ${c.muted!==false?'checked':''} onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.muted=this.checked"><span class="slider"></span></label>Muten (aus = Mute aufheben)</label>`;
