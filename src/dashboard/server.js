@@ -68,6 +68,13 @@ function startDashboard(client) {
       .map(c => ({ id: c.id, name: c.name })).sort((a,b) => a.name.localeCompare(b.name)));
   });
 
+  app.get('/api/guilds/:gid/voicechannels', auth, (req, res) => {
+    const g = client.guilds.cache.get(req.params.gid);
+    if (!g) return res.status(404).json({ error: 'Guild not found' });
+    res.json(g.channels.cache.filter(c => c.type === ChannelType.GuildVoice)
+      .map(c => ({ id: c.id, name: c.name })).sort((a,b) => a.name.localeCompare(b.name)));
+  });
+
   app.get('/api/guilds/:gid/roles', auth, (req, res) => {
     const g = client.guilds.cache.get(req.params.gid);
     if (!g) return res.status(404).json({ error: 'Guild not found' });
