@@ -37,6 +37,34 @@ async function applyAction(message, config, reason) {
   }
 }
 
+async function applyTrapAction(message, config) {
+  const action = config.trapAction || 'ban';
+  const actionText = { mute: 'stummgeschaltet', kick: 'gekickt', ban: 'gebannt' }[action] || 'moderiert';
+  const embed = new EmbedBuilder()
+    .setColor(0xE74C3C).setTitle('🪤 Spam-Falle ausgelöst')
+    .setDescription(`${message.author.tag} (\`${message.author.id}\`) hat in einem Falle-Kanal geschrieben und wurde **${actionText}**.`)
+    .setTimestamp();
+  const logChId = config.modlogChannelId;
+  if (logChId) {
+    const logCh = await message.guild.channels.fetch(logChId).catch(() => null);
+    if (logCh) logCh.send({ embeds: [embed] }).catch(() => {});
+  }
+  logMod(message.client, message.guild.id, { action: 'trap-' + action, target: message.author, reason: 'Spam-Falle-Kanal' });
+  try {
+    const member = await message.guild.members.fetch(message.author.id).catch(() => null);
+    if (!member) return;
+    if (action === 'mute' && member.moderatable) {
+      await member.timeout(config.trapMuteDurationMs || 10 * 60_000, 'Automod: Spam-Falle-Kanal');
+    } else if (action === 'kick' && member.kickable) {
+      await member.kick('Automod: Spam-Falle-Kanal');
+    } else if (action === 'ban' && member.bannable) {
+      await member.ban({ reason: 'Automod: Spam-Falle-Kanal' });
+    }
+  } catch (err) {
+    console.error('[Automod-Trap] Konnte Aktion nicht ausführen:', err.message);
+  }
+}
+
 module.exports = {
   name: 'messageCreate',
   async execute(message) {
@@ -49,6 +77,13 @@ module.exports = {
 
     const excludedRoles = config.excludedRoles || [];
     if (excludedRoles.length && message.member?.roles.cache.some(r => excludedRoles.includes(r.id))) return;
+
+    // Spam-Falle: JEDE Nachricht in diesen Kanälen führt sofort zur Aktion
+    if (config.trapChannels?.length && config.trapChannels.includes(message.channel.id)) {
+      await message.delete().catch(() => {});
+      return applyTrapAction(message, config);
+    }
+    if (!config.enabled) return;
 
     // Bad Words
     if (config.bannedWords?.length) {
