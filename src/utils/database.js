@@ -23,6 +23,11 @@ const FILES = {
   serverstats: path.join(DATA_DIR, 'serverstats.json'),
   reactionroles: path.join(DATA_DIR, 'reactionroles.json'),
   welcomer: path.join(DATA_DIR, 'welcomer.json'),
+  starboard: path.join(DATA_DIR, 'starboard.json'),
+  leveling: path.join(DATA_DIR, 'leveling.json'),
+  levelingusers: path.join(DATA_DIR, 'levelingusers.json'),
+  birthdays: path.join(DATA_DIR, 'birthdays.json'),
+  birthdayconfig: path.join(DATA_DIR, 'birthdayconfig.json'),
 };
 
 function readJSON(file) {
