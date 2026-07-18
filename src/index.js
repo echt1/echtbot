@@ -35,8 +35,10 @@ client.once('ready', () => {
   const serverStats = require('./utils/serverStats');
   serverStats.initDb(require('./utils/database'));
   serverStats.startStatsUpdater(client);
-});
 
+  const reactionRoles = require('./utils/reactionRoles');
+  reactionRoles.initDb(require('./utils/database'));
+});
 process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
 
 client.login(process.env.DISCORD_TOKEN);
