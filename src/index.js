@@ -16,6 +16,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildPresences,
   ],
   partials: [Partials.Channel],
 });
@@ -30,6 +31,10 @@ client.once('ready', () => {
   const nominations = require('./utils/nominations');
   nominations.initDb(require('./utils/database'));
   nominations.startExpiryChecker(client);
+ 
+  const serverStats = require('./utils/serverStats');
+  serverStats.initDb(require('./utils/database'));
+  serverStats.startStatsUpdater(client);
 });
 
 process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
