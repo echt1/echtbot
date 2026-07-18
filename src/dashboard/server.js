@@ -752,6 +752,36 @@ function startDashboard(client) {
     res.json({ ok: true });
   });
 
+  // ── Starboard ────────────────────────────────────────────────────────
+  const starboardModule = require('../utils/starboard');
+  starboardModule.initDb(db);
+  app.get('/api/starboard/:gid', auth, (req, res) => res.json(starboardModule.getConfig(req.params.gid)));
+  app.post('/api/starboard/:gid', auth, (req, res) => {
+    const cfg = starboardModule.getConfig(req.params.gid);
+    starboardModule.saveConfig(req.params.gid, { ...cfg, ...req.body });
+    res.json({ ok: true });
+  });
+
+  // ── Leveling ─────────────────────────────────────────────────────────
+  const levelingModule = require('../utils/leveling');
+  levelingModule.initDb(db);
+  app.get('/api/leveling/:gid', auth, (req, res) => res.json(levelingModule.getCfg(req.params.gid)));
+  app.post('/api/leveling/:gid', auth, (req, res) => {
+    const cfg = levelingModule.getCfg(req.params.gid);
+    levelingModule.saveCfg(req.params.gid, { ...cfg, ...req.body });
+    res.json({ ok: true });
+  });
+
+  // ── Birthday ─────────────────────────────────────────────────────────
+  const birthdayModule = require('../utils/birthday');
+  birthdayModule.initDb(db);
+  app.get('/api/birthday/:gid/config', auth, (req, res) => res.json(birthdayModule.getCfg(req.params.gid)));
+  app.post('/api/birthday/:gid/config', auth, (req, res) => {
+    const cfg = birthdayModule.getCfg(req.params.gid);
+    birthdayModule.saveCfg(req.params.gid, { ...cfg, ...req.body });
+    res.json({ ok: true });
+  });
+
   app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
 }
 
