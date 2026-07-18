@@ -71,8 +71,9 @@ module.exports = {
     if (message.author.bot || !message.guild) return;
 
     // ── AFK: eigene Rückkehr erkennen ───────────────────────────────────
+    const afkAutomodCfg = db.get('automod')[message.guild.id];
     const afkStore = db.get('afk') || {};
-    const guildAfk = afkStore[message.guild.id] || {};
+    const guildAfk = afkAutomodCfg?.afkEnabled === false ? {} : (afkStore[message.guild.id] || {});
     if (guildAfk[message.author.id]) {
       delete guildAfk[message.author.id];
       db.set('afk', afkStore);
