@@ -4,6 +4,8 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
 const db = require('../utils/database');
 const { handleSlashCommand, handleComponentInteraction, handleModalInteraction } = require('../utils/customCommands');
 const nominations = require('../utils/nominations');
+const reactionRoles = require('../utils/reactionRoles');
+
 
 async function createTicketChannel(interaction, prefix, categoryLabel, formData) {
   const guildConfig = db.get('tickets');
@@ -86,8 +88,14 @@ module.exports = {
 
 async function handleInteraction(interaction) {
 
+    // ── Reaction Roles ────────────────────────────────────────────────────
+    if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith('rr|')) {
+      return reactionRoles.handleInteraction(interaction);
+    }
+
     // ── Nominations: Buttons / Formulare ─────────────────────────────────
     if (interaction.isButton() && interaction.customId.startsWith('nom|')) {
+
       return nominations.handleButton(interaction);
     }
     if (interaction.isModalSubmit() && interaction.customId.startsWith('nom|')) {
