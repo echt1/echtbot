@@ -641,6 +641,60 @@ function startDashboard(client) {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
+  // ── Sticky Messages ──────────────────────────────────────────────────
+  app.get('/api/sticky/:gid', auth, (req, res) => {
+    const store = db.get('sticky') || {};
+    res.json(store[req.params.gid] || {});
+  });
+ 
+  app.post('/api/sticky/:gid/:channelId', auth, (req, res) => {
+    const { content } = req.body;
+    const store = db.get('sticky') || {};
+    const gid = req.params.gid;
+    store[gid] = store[gid] || {};
+    store[gid][req.params.channelId] = { content, lastMessageId: null, lastPostedAt: 0 };
+    db.set('sticky', store);
+    res.json({ ok: true });
+  });
+ 
+  app.delete('/api/sticky/:gid/:channelId', auth, (req, res) => {
+    const store = db.get('sticky') || {};
+    const gid = req.params.gid;
+    if (store[gid]) delete store[gid][req.params.channelId];
+    db.set('sticky', store);
+    res.json({ ok: true });
+  });
+ 
+  // ── Server Stats ─────────────────────────────────────────────────────
+  const serverStatsModule = require('../utils/serverStats');
+  serverStatsModule.initDb(db);
+ 
+  app.get('/api/serverstats/:gid', auth, (req, res) => {
+    const store = db.get('serverstats') || {};
+    res.json(store[req.params.gid] || []);
+  });
+ 
+  app.post('/api/serverstats/:gid', auth, (req, res) => {
+    const { channelId, template } = req.body;
+    if (!channelId || !template) return res.status(400).json({ error: 'channelId und template erforderlich' });
+    const store = db.get('serverstats') || {};
+    const gid = req.params.gid;
+    store[gid] = store[gid] || [];
+    store[gid] = store[gid].filter(e => e.channelId !== channelId);
+    store[gid].push({ channelId, template });
+    db.set('serverstats', store);
+    serverStatsModule.updateAll(client).catch(() => {});
+    res.json({ ok: true });
+  });
+ 
+  app.delete('/api/serverstats/:gid/:channelId', auth, (req, res) => {
+    const store = db.get('serverstats') || {};
+    const gid = req.params.gid;
+    store[gid] = (store[gid] || []).filter(e => e.channelId !== req.params.channelId);
+    db.set('serverstats', store);
+    res.json({ ok: true });
+  });
+ 
   app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
 }
 
