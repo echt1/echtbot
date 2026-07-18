@@ -18,6 +18,9 @@ const FILES = {
   nominationTypes: path.join(DATA_DIR, 'nominationTypes.json'),
   nominations: path.join(DATA_DIR, 'nominations.json'),
   linkedroles: path.join(DATA_DIR, 'linkedroles.json'),
+  afk: path.join(DATA_DIR, 'afk.json'),
+  sticky: path.join(DATA_DIR, 'sticky.json'),
+  serverstats: path.join(DATA_DIR, 'serverstats.json'),
 };
 
 function readJSON(file) {
