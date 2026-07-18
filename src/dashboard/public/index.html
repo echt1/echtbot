@@ -526,6 +526,15 @@ async function loadSettings(){
           <label class="toggle"><input type="checkbox" ${data.afkEnabled!==false?'checked':''} onchange="api('/api/settings/${gid}/afk',{method:'POST',body:JSON.stringify({enabled:this.checked})})"><span class="slider"></span></label>
         </div>
       </div>
+      <div class="section"><h2>⭐ Starboard</h2>
+        <div id="sb-content"><div class="empty">Laden...</div></div>
+      </div>
+      <div class="section"><h2>📈 Leveling</h2>
+        <div id="lvl-content"><div class="empty">Laden...</div></div>
+      </div>
+      <div class="section"><h2>🎂 Geburtstage</h2>
+        <div id="bday-content"><div class="empty">Laden...</div></div>
+      </div>
       <div class="section"><h2>Mod-Log Channel</h2>
         <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Alle Moderations-Aktionen werden in diesen Channel geloggt.</p>
         <div class="row">
@@ -544,6 +553,9 @@ async function loadSettings(){
       </div>`;
   loadStickyMessages(gid);
   loadServerStats(gid);
+  loadStarboardCfg(gid);
+  loadLevelingCfg(gid);
+  loadBirthdayCfg(gid);
   }catch(e){document.getElementById('settings-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
 }
 async function loadStickyMessages(gid){
@@ -600,6 +612,93 @@ async function removeServerStat(gid,chId){
   loadServerStats(gid);
 }
  
+async function loadStarboardCfg(gid){
+  const cfg = await api(`/api/starboard/${gid}`).catch(()=>({}));
+  const el = document.getElementById('sb-content'); if(!el) return;
+  el.innerHTML = `
+    <div class="row" style="margin-bottom:10px"><label>Aktiviert</label>
+      <label class="toggle"><input type="checkbox" id="sb-enabled" ${cfg.enabled?'checked':''}><span class="slider"></span></label></div>
+    <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Ziel-Kanal</label>
+      <select id="sb-channel" style="width:100%">${chOptions(gid,cfg.channelId)}</select></div>
+    <div class="row" style="margin-bottom:10px">
+      <label>Schwelle</label><input type="number" id="sb-threshold" value="${cfg.threshold||3}" style="width:70px" min="1">
+      <label>Emoji</label><input type="text" id="sb-emoji" value="${cfg.emoji||'⭐'}" style="width:60px">
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="saveStarboardCfg('${gid}')">Speichern</button>
+    <span class="success" id="sb-msg" style="margin-left:10px"></span>`;
+}
+async function saveStarboardCfg(gid){
+  await api(`/api/starboard/${gid}`,{method:'POST',body:JSON.stringify({
+    enabled: document.getElementById('sb-enabled').checked,
+    channelId: document.getElementById('sb-channel').value,
+    threshold: parseInt(document.getElementById('sb-threshold').value)||3,
+    emoji: document.getElementById('sb-emoji').value||'⭐',
+  })});
+  flash('sb-msg','✅ Gespeichert.');
+}
+
+async function loadLevelingCfg(gid){
+  const cfg = await api(`/api/leveling/${gid}`).catch(()=>({}));
+  const el = document.getElementById('lvl-content'); if(!el) return;
+  const rewards = cfg.roleRewards||[];
+  el.innerHTML = `
+    <div class="row" style="margin-bottom:10px"><label>Aktiviert</label>
+      <label class="toggle"><input type="checkbox" id="lvl-enabled" ${cfg.enabled?'checked':''}><span class="slider"></span></label></div>
+    <div class="row" style="margin-bottom:10px">
+      <label>XP pro Nachricht</label>
+      <input type="number" id="lvl-xpmin" value="${cfg.xpMin??15}" style="width:60px"> - <input type="number" id="lvl-xpmax" value="${cfg.xpMax??25}" style="width:60px">
+      <label>Cooldown (Sek)</label><input type="number" id="lvl-cooldown" value="${cfg.cooldownSec??60}" style="width:70px">
+    </div>
+    <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Level-Up-Kanal (leer = im selben Kanal)</label>
+      <select id="lvl-channel"><option value="">Gleicher Kanal</option>${chOptions(gid,cfg.levelUpChannelId)}</select></div>
+    <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Level-Up-Nachricht</label>
+      <input type="text" id="lvl-message" value="${(cfg.levelUpMessage||'').replace(/"/g,'&quot;')}" placeholder="🎉 {user} hat Level **{level}** erreicht!" style="width:100%"></div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:.8rem;color:var(--muted);margin-bottom:5px">Rollen-Belohnungen</div>
+      <div id="lvl-rewards">${rewards.map((r,i)=>`<div style="display:flex;gap:6px;margin-bottom:5px">
+        <input type="number" value="${r.level}" placeholder="Level" style="width:70px" onchange="window.__lvlRewards[${i}].level=parseInt(this.value)">
+        <select style="flex:1" onchange="window.__lvlRewards[${i}].roleId=this.value">${roleOptions(gid,r.roleId)}</select>
+        <button onclick="window.__lvlRewards.splice(${i},1);loadLevelingCfg('${gid}')" style="background:none;border:none;color:var(--red);cursor:pointer">✕</button>
+      </div>`).join('')}</div>
+      <button class="btn btn-ghost btn-sm" onclick="window.__lvlRewards.push({level:5,roleId:''});loadLevelingCfg('${gid}')">+ Belohnung</button>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="saveLevelingCfg('${gid}')">Speichern</button>
+    <span class="success" id="lvl-msg" style="margin-left:10px"></span>`;
+  window.__lvlRewards = JSON.parse(JSON.stringify(rewards));
+}
+async function saveLevelingCfg(gid){
+  await api(`/api/leveling/${gid}`,{method:'POST',body:JSON.stringify({
+    enabled: document.getElementById('lvl-enabled').checked,
+    xpMin: parseInt(document.getElementById('lvl-xpmin').value)||15,
+    xpMax: parseInt(document.getElementById('lvl-xpmax').value)||25,
+    cooldownSec: parseInt(document.getElementById('lvl-cooldown').value)||60,
+    levelUpChannelId: document.getElementById('lvl-channel').value||null,
+    levelUpMessage: document.getElementById('lvl-message').value,
+    roleRewards: window.__lvlRewards||[],
+  })});
+  flash('lvl-msg','✅ Gespeichert.');
+}
+
+async function loadBirthdayCfg(gid){
+  const cfg = await api(`/api/birthday/${gid}/config`).catch(()=>({}));
+  const el = document.getElementById('bday-content'); if(!el) return;
+  el.innerHTML = `
+    <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Ansage-Kanal</label>
+      <select id="bday-channel" style="width:100%">${chOptions(gid,cfg.channelId)}</select></div>
+    <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Nachricht</label>
+      <input type="text" id="bday-message" value="${(cfg.message||'').replace(/"/g,'&quot;')}" placeholder="🎂 Alles Gute zum Geburtstag, {user}!" style="width:100%"></div>
+    <button class="btn btn-primary btn-sm" onclick="saveBirthdayCfg('${gid}')">Speichern</button>
+    <span class="success" id="bday-msg" style="margin-left:10px"></span>
+    <p style="font-size:.76rem;color:var(--muted);margin-top:8px">User setzen ihren eigenen Geburtstag selbst mit /birthday set.</p>`;
+}
+async function saveBirthdayCfg(gid){
+  await api(`/api/birthday/${gid}/config`,{method:'POST',body:JSON.stringify({
+    channelId: document.getElementById('bday-channel').value,
+    message: document.getElementById('bday-message').value,
+  })});
+  flash('bday-msg','✅ Gespeichert.');
+}
+
 async function addJoinRole(gid){
   const rid=document.getElementById('join-role-sel')?.value;if(!rid)return;
   const data=await api(`/api/settings/${gid}`).catch(()=>({}));
