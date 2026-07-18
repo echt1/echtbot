@@ -1199,9 +1199,12 @@ function renderNomPage(entries){
     return `<tr>
       <td style="font-size:.82rem;color:var(--muted)">${type?.name||n.typeId}</td>
       <td style="font-size:.82rem">${new Date(n.createdAt).toLocaleString('de-DE')}</td>
-      <td style="color:${statusColors[n.status]||'var(--muted)'};font-size:.82rem">${statusText[n.status]||n.status}${n.overridden?' (überschrieben)':''}</td>
+      <td style="color:${statusColors[n.status]||'var(--muted)'};font-size:.82rem">${statusText[n.status]||n.status}${n.overridden?' (überschrieben)':''}${n.deletedFromDiscord?' <span style="color:var(--red)">⚠️ Nachricht gelöscht</span>':''}</td>
       <td style="font-size:.82rem">✅ ${Object.values(n.votes||{}).filter(v=>v==='yes').length} / ❌ ${Object.values(n.votes||{}).filter(v=>v==='no').length}</td>
-      <td><button class="btn btn-danger btn-sm" data-id="${n.id}" onclick="nomEntryDeleteBtn(this)">✕</button></td>
+      <td><div style="display:flex;gap:4px">
+        ${n.deletedFromDiscord?`<button class="btn btn-ghost btn-sm" data-id="${n.id}" onclick="nomResendBtn(this)">🔁 Erneut senden</button>`:''}
+        <button class="btn btn-danger btn-sm" data-id="${n.id}" onclick="nomEntryDeleteBtn(this)">✕</button>
+      </div></td>
     </tr>`;
   }).join('');
 
@@ -1223,6 +1226,12 @@ function renderNomPage(entries){
 function nomEditBtn(btn){ nomOpenForm(NOM.types.find(t=>t.id===btn.dataset.id)); }
 function nomDeleteBtn(btn){ nomDeleteType(btn.dataset.id); }
 function nomEntryDeleteBtn(btn){ nomDeleteEntry(btn.dataset.id); }
+async function nomResendBtn(btn){
+  btn.disabled=true; btn.textContent='⏳...';
+  const r = await api(`/api/nominations/${NOM.gid}/entries/${btn.dataset.id}/resend`,{method:'POST'});
+  if(!r.ok) alert('Konnte nicht erneut gesendet werden - ist der Kanal noch gültig?');
+  loadNominations();
+}
 
 async function nomDeleteType(id){
   if(!confirm('Typ löschen? Der Slash-Command wird ebenfalls entfernt.'))return;
