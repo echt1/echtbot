@@ -567,11 +567,24 @@ function startDashboard(client) {
     res.json(nominations.getNoms(req.params.gid));
   });
 
-  app.delete('/api/nominations/:gid/entries/:id', auth, (req, res) => {
+  app.delete('/api/nominations/:gid/entries/:id', auth, async (req, res) => {
     const gid = req.params.gid;
-    const list = nominations.getNoms(gid).filter(n => n.id !== req.params.id);
+    const all = nominations.getNoms(gid);
+    const nom = all.find(n => n.id === req.params.id);
+    if (nom?.channelId && nom?.messageId) {
+      const ch = await client.channels.fetch(nom.channelId).catch(() => null);
+      if (ch) { const m = await ch.messages.fetch(nom.messageId).catch(() => null); if (m) await m.delete().catch(() => {}); }
+    }
+    const list = all.filter(n => n.id !== req.params.id);
     nominations.saveNoms(gid, list);
     res.json({ ok: true });
+  });
+
+  app.post('/api/nominations/:gid/entries/:id/resend', auth, async (req, res) => {
+    const g = client.guilds.cache.get(req.params.gid);
+    if (!g) return res.status(404).json({ error: 'Guild not found' });
+    const ok = await nominations.resendNomination(client, g, req.params.id);
+    res.json({ ok });
   });
 
   // ── Linked Roles ─────────────────────────────────────────────────────
