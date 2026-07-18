@@ -69,6 +69,47 @@ module.exports = {
   name: 'messageCreate',
   async execute(message) {
     if (message.author.bot || !message.guild) return;
+
+    // ── AFK: eigene Rückkehr erkennen ───────────────────────────────────
+    const afkStore = db.get('afk') || {};
+    const guildAfk = afkStore[message.guild.id] || {};
+    if (guildAfk[message.author.id]) {
+      delete guildAfk[message.author.id];
+      db.set('afk', afkStore);
+      message.reply('👋 Willkommen zurück, dein AFK-Status wurde entfernt.')
+        .then(m => setTimeout(() => m.delete().catch(() => {}), 8000)).catch(() => {});
+      if (message.member?.manageable && message.member.nickname?.startsWith('[AFK] ')) {
+        message.member.setNickname(message.member.nickname.replace('[AFK] ', '')).catch(() => {});
+      }
+    }
+    // ── AFK: erwähnte User informieren ──────────────────────────────────
+    if (message.mentions.users.size) {
+      const afkMentions = [...message.mentions.users.values()].filter(u => guildAfk[u.id]);
+      if (afkMentions.length) {
+        const list = afkMentions.map(u => `${u} ist AFK: ${guildAfk[u.id].reason}`).join('\n');
+        message.reply(list).then(m => setTimeout(() => m.delete().catch(() => {}), 8000)).catch(() => {});
+      }
+    }
+
+    // ── Sticky Messages ──────────────────────────────────────────────────
+    const stickyStore = db.get('sticky') || {};
+    const stickyCfg = stickyStore[message.guild.id]?.[message.channel.id];
+    if (stickyCfg && message.id !== stickyCfg.lastMessageId) {
+      const now = Date.now();
+      if (!stickyCfg.lastPostedAt || now - stickyCfg.lastPostedAt > 8000) {
+        if (stickyCfg.lastMessageId) {
+          const old = await message.channel.messages.fetch(stickyCfg.lastMessageId).catch(() => null);
+          if (old) await old.delete().catch(() => {});
+        }
+        const sent = await message.channel.send(stickyCfg.content).catch(() => null);
+        if (sent) {
+          stickyCfg.lastMessageId = sent.id;
+          stickyCfg.lastPostedAt = now;
+          db.set('sticky', stickyStore);
+        }
+      }
+    }
+
     if (message.member?.permissions.has('ManageGuild')) return;
 
     const automod = db.get('automod');
