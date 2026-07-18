@@ -17,8 +17,9 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildMessageReactions,
   ],
-  partials: [Partials.Channel],
+  partials: [Partials.Channel, Partials.Message, Partials.Reaction, Partials.User],
 });
 
 loadCommands(client);
@@ -38,6 +39,16 @@ client.once('ready', () => {
 
   const reactionRoles = require('./utils/reactionRoles');
   reactionRoles.initDb(require('./utils/database'));
+
+  const starboard = require('./utils/starboard');
+  starboard.initDb(require('./utils/database'));
+
+  const leveling = require('./utils/leveling');
+  leveling.initDb(require('./utils/database'));
+
+  const birthday = require('./utils/birthday');
+  birthday.initDb(require('./utils/database'));
+  birthday.startBirthdayChecker(client);
 });
 process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
 
