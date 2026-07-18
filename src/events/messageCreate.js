@@ -7,6 +7,7 @@ const INVITE_REGEX = /(discord\.gg|discord(?:app)?\.com\/invite)\/[a-zA-Z0-9-]+/
 
 // In-Memory Spam-Tracking: { "guildId-userId": [timestamps] }
 const messageLog = new Map();
+const stickyLocks = new Set();
 
 async function applyAction(message, config, reason) {
   const embed = new EmbedBuilder()
@@ -95,28 +96,31 @@ module.exports = {
     // ── Sticky Messages ──────────────────────────────────────────────────
     const stickyStore = db.get('sticky') || {};
     const stickyCfg = stickyStore[message.guild.id]?.[message.channel.id];
-    if (stickyCfg && message.id !== stickyCfg.lastMessageId) {
+    const stickyLockKey = `${message.guild.id}-${message.channel.id}`;
+    if (stickyCfg && message.id !== stickyCfg.lastMessageId && !stickyLocks.has(stickyLockKey)) {
       const now = Date.now();
       if (!stickyCfg.lastPostedAt || now - stickyCfg.lastPostedAt > 8000) {
-        if (stickyCfg.lastMessageId) {
-          const old = await message.channel.messages.fetch(stickyCfg.lastMessageId).catch(() => null);
-          if (old) await old.delete().catch(() => {});
-        }
-        const sent = await message.channel.send(stickyCfg.content).catch(() => null);
-        if (sent) {
-          stickyCfg.lastMessageId = sent.id;
-          stickyCfg.lastPostedAt = now;
-          db.set('sticky', stickyStore);
+        stickyLocks.add(stickyLockKey);
+        try {
+          if (stickyCfg.lastMessageId) {
+            const old = await message.channel.messages.fetch(stickyCfg.lastMessageId).catch(() => null);
+            if (old) await old.delete().catch(() => {});
+          }
+          const sent = await message.channel.send(stickyCfg.content).catch(() => null);
+          if (sent) {
+            stickyCfg.lastMessageId = sent.id;
+            stickyCfg.lastPostedAt = Date.now();
+            db.set('sticky', stickyStore);
+          }
+        } finally {
+          stickyLocks.delete(stickyLockKey);
         }
       }
     }
 
-    if (message.member?.permissions.has('ManageGuild')) return;
-
-    // ── Leveling: XP vergeben (laeuft fuer alle, auch Admins - daher
-    // NACH dem ManageGuild-Return waere falsch, deshalb steht es hier
-    // NACH der Zeile aber mit eigenem Fruehausstieg falls gewuenscht)
     require('../utils/leveling').handleMessage(message).catch(() => {});
+
+    if (message.member?.permissions.has('ManageGuild')) return;
 
     const automod = db.get('automod');
     const config = automod[message.guild.id];
