@@ -100,6 +100,8 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
     <div class="nav-item" onclick="nav('ticketlog',this)">📋 Ticket-Log</div>
     <div class="nav-item" onclick="nav('social',this)">📡 Social Media</div>
     <div class="nav-item" onclick="nav('cc',this)">🔧 Custom Commands</div>
+    <div class="nav-item" onclick="nav('reactionroles',this)">🎭 Reaction Roles</div>
+    <div class="nav-item" onclick="nav('welcomer',this)">👋 Welcomer</div>
     <div class="nav-item" onclick="nav('linkedroles',this)">🔗 Linked Roles</div>
     <div class="nav-item" onclick="nav('nominations',this)">🗳️ Nominations</div>
     <div class="nav-item" onclick="nav('j2c',this)">🔊 Join2Create</div>
@@ -243,6 +245,19 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
       </div>
     </div>
 
+    <!-- Reaction Roles -->
+    <div id="page-reactionroles" class="page">
+      <h1 class="ptitle">Reaction Roles</h1>
+      <p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">Klick-basierte Rollenvergabe über Buttons oder ein Dropdown-Menü (keine echten Emoji-Reaktionen).</p>
+      <div id="rr-content"><div class="empty">Laden...</div></div>
+    </div>
+
+    <!-- Welcomer -->
+    <div id="page-welcomer" class="page">
+      <h1 class="ptitle">Welcomer</h1>
+      <div id="welcomer-content"><div class="empty">Laden...</div></div>
+    </div>
+
     <!-- Linked Roles -->
     <div id="page-linkedroles" class="page">
       <h1 class="ptitle">Linked Roles</h1>
@@ -306,7 +321,7 @@ function nav(page,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if(el)el.classList.add('active');
-  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,cc:loadCC,j2c:loadJ2C,settings:loadSettings,nominations:loadNominations,linkedroles:loadLinkedRoles};
+  const loaders={overview:loadOverview,status:loadStatus,automod:loadAutomod,embed:loadEmbedPage,tickets:loadTickets,social:loadSocial,warnings:loadWarnings,ticketlog:loadTicketLog,cc:loadCC,j2c:loadJ2C,settings:loadSettings,nominations:loadNominations,linkedroles:loadLinkedRoles,reactionroles:loadReactionRoles,welcomer:loadWelcomer};
   if(loaders[page])loaders[page]();
 }
 
@@ -1141,6 +1156,147 @@ async function delWarn(gid,uid){
 </script>
 </body>
 </html>
+<script>
+// ═══════════════════════════════════════════════════════════
+// REACTION ROLES
+// ═══════════════════════════════════════════════════════════
+let RR = { gid: null, rules: [], editing: null };
+
+async function loadReactionRoles(){
+  RR.gid = firstGuild(); if(!RR.gid) return;
+  await loadGuildData(RR.gid);
+  RR.rules = await api(`/api/reactionroles/${RR.gid}`).catch(()=>[]);
+  renderRR();
+}
+
+function renderRR(){
+  const g = RR.gid;
+  const rows = RR.rules.map(r=>`<tr>
+    <td><strong>${r.title||'Unbenannt'}</strong><div style="font-size:.78rem;color:var(--muted)">${r.mode==='select'?'🔽 Dropdown':'🔘 Buttons'} · ${r.options?.length||0} Rolle(n)</div></td>
+    <td style="font-size:.82rem;color:var(--muted)">${chName(g,r.channelId)}</td>
+    <td><button class="btn btn-danger btn-sm" data-id="${r.id}" onclick="rrDeleteBtn(this)">✕</button></td>
+  </tr>`).join('');
+  document.getElementById('rr-content').innerHTML = `
+    <div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h2 style="margin:0">Regeln</h2>
+        <button class="btn btn-primary btn-sm" onclick="rrNew()">➕ Neue Regel</button>
+      </div>
+      ${RR.rules.length?`<table><tr><th>Titel</th><th>Kanal</th><th></th></tr>${rows}</table>`:'<div class="empty">Noch keine Regeln.</div>'}
+    </div>
+    <div id="rr-form-section" class="section" style="display:none"></div>`;
+}
+
+function rrDeleteBtn(btn){ if(!confirm('Regel löschen? Die Nachricht in Discord wird ebenfalls gelöscht.'))return; api(`/api/reactionroles/${RR.gid}/${btn.dataset.id}`,{method:'DELETE'}).then(loadReactionRoles); }
+
+function rrNew(){
+  rrOpenForm({ id:null, title:'', description:'', channelId:'', mode:'button', color:'#5865f2', options:[{label:'',emoji:'',roleId:'',style:'secondary'}] });
+}
+
+function rrOpenForm(rule){
+  RR.editing = JSON.parse(JSON.stringify(rule));
+  const g = RR.gid, r = RR.editing;
+  const sec = document.getElementById('rr-form-section');
+  sec.style.display='block';
+  sec.innerHTML = `
+    <h2>Neue Reaction-Role-Nachricht</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;max-width:520px">
+      <div><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Kanal</label>
+        <select style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" onchange="RR.editing.channelId=this.value">
+          <option value="">Wählen...</option>${chOptions(g,r.channelId)}
+        </select></div>
+      <div><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Titel</label>
+        <input type="text" value="${(r.title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" oninput="RR.editing.title=this.value"></div>
+      <div><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Beschreibung</label>
+        <textarea style="width:100%;min-height:60px;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" oninput="RR.editing.description=this.value">${r.description||''}</textarea></div>
+      <div><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Anzeigeart</label>
+        <select style="width:100%;padding:7px 9px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text)" onchange="RR.editing.mode=this.value;rrOpenForm(RR.editing)">
+          <option value="button" ${r.mode!=='select'?'selected':''}>🔘 Buttons (max. 25)</option>
+          <option value="select" ${r.mode==='select'?'selected':''}>🔽 Dropdown-Menü (max. 25, Mehrfachauswahl)</option>
+        </select></div>
+      <div id="rr-options">${rrOptionsHtml()}</div>
+      <button class="btn btn-ghost btn-sm" onclick="RR.editing.options.push({label:'',emoji:'',roleId:'',style:'secondary'});rrOpenForm(RR.editing)">+ Rolle hinzufügen</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" onclick="rrSave()">💾 Speichern & Posten</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('rr-form-section').style.display='none'">Abbrechen</button>
+    </div>`;
+}
+
+function rrOptionsHtml(){
+  const g = RR.gid, r = RR.editing;
+  return r.options.map((o,i)=>`<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px">
+    <div style="display:flex;gap:6px;margin-bottom:5px">
+      <input type="text" value="${(o.label||'').replace(/"/g,'&quot;')}" placeholder="Button/Options-Text" style="flex:1;padding:5px 7px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.8rem" oninput="RR.editing.options[${i}].label=this.value">
+      <input type="text" value="${o.emoji||''}" placeholder="😀" style="width:44px;padding:5px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);text-align:center" oninput="RR.editing.options[${i}].emoji=this.value">
+      <button onclick="RR.editing.options.splice(${i},1);rrOpenForm(RR.editing)" style="background:none;border:none;color:var(--red);cursor:pointer">✕</button>
+    </div>
+    <div style="display:flex;gap:6px">
+      <select style="flex:1;padding:5px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.8rem" onchange="RR.editing.options[${i}].roleId=this.value">
+        <option value="">Rolle wählen...</option>${roleOptions(g,o.roleId)}
+      </select>
+      ${RR.editing.mode!=='select'?`<select style="width:110px;padding:5px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:.8rem" onchange="RR.editing.options[${i}].style=this.value">
+        ${['primary','secondary','success','danger'].map(s=>`<option value="${s}" ${o.style===s?'selected':''}>${s}</option>`).join('')}
+      </select>`:''}
+    </div>
+  </div>`).join('');
+}
+
+async function rrSave(){
+  const r = RR.editing;
+  if(!r.channelId){ alert('Kanal ist Pflicht.'); return; }
+  if(!r.options.length || r.options.some(o=>!o.roleId)){ alert('Jede Option braucht eine Rolle.'); return; }
+  const res = await api(`/api/reactionroles/${RR.gid}`,{method:'POST',body:JSON.stringify(r)});
+  if(res?.ok){ document.getElementById('rr-form-section').style.display='none'; loadReactionRoles(); }
+  else alert('Fehler: '+(res?.error||'Unbekannt'));
+}
+
+// ═══════════════════════════════════════════════════════════
+// WELCOMER
+// ═══════════════════════════════════════════════════════════
+async function loadWelcomer(){
+  const gid = firstGuild(); if(!gid) return;
+  await loadGuildData(gid);
+  const cfg = await api(`/api/welcomer/${gid}`).catch(()=>({}));
+  document.getElementById('welcomer-content').innerHTML = `
+    <div class="section">
+      <div class="row" style="margin-bottom:14px"><label>Aktiviert</label>
+        <label class="toggle"><input type="checkbox" id="wc-enabled" ${cfg.enabled?'checked':''}><span class="slider"></span></label>
+      </div>
+      <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Kanal</label>
+        <select id="wc-channel" style="width:100%">${chOptions(gid,cfg.channelId)}</select></div>
+      <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Nachricht (Text über dem Embed, optional)</label>
+        <input type="text" id="wc-message" value="${(cfg.message||'').replace(/"/g,'&quot;')}" placeholder="{user} ist da!" style="width:100%"></div>
+      <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Embed-Titel</label>
+        <input type="text" id="wc-embed-title" value="${(cfg.embedTitle||'').replace(/"/g,'&quot;')}" placeholder="Willkommen auf {server}!" style="width:100%"></div>
+      <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Embed-Beschreibung</label>
+        <textarea id="wc-embed-desc" style="width:100%;min-height:60px">${cfg.embedDescription||''}</textarea>
+        <div style="font-size:.72rem;color:var(--muted);margin-top:3px">{user} {username} {server} {membercount}</div></div>
+      <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Embed-Farbe</label>
+        <input type="color" id="wc-color" value="${cfg.embedColor||'#3ba55c'}"></div>
+      <div class="row" style="margin-bottom:10px"><label>Zusätzlich per DM</label>
+        <label class="toggle"><input type="checkbox" id="wc-dm-enabled" ${cfg.dmEnabled?'checked':''}><span class="slider"></span></label></div>
+      <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">DM-Text</label>
+        <textarea id="wc-dm-message" style="width:100%;min-height:50px">${cfg.dmMessage||''}</textarea></div>
+      <button class="btn btn-primary btn-sm" onclick="saveWelcomer('${gid}')">Speichern</button>
+      <span class="success" id="wc-msg" style="margin-left:10px"></span>
+    </div>`;
+}
+async function saveWelcomer(gid){
+  const payload = {
+    enabled: document.getElementById('wc-enabled').checked,
+    channelId: document.getElementById('wc-channel').value,
+    message: document.getElementById('wc-message').value,
+    embedTitle: document.getElementById('wc-embed-title').value,
+    embedDescription: document.getElementById('wc-embed-desc').value,
+    embedColor: document.getElementById('wc-color').value,
+    dmEnabled: document.getElementById('wc-dm-enabled').checked,
+    dmMessage: document.getElementById('wc-dm-message').value,
+  };
+  await api(`/api/welcomer/${gid}`,{method:'POST',body:JSON.stringify(payload)});
+  flash('wc-msg','✅ Gespeichert.');
+}
+</script>
 <script>
 // ═══════════════════════════════════════════════════════════
 // LINKED ROLES
