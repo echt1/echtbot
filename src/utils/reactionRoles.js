@@ -67,15 +67,22 @@ async function handleInteraction(interaction) {
   if (interaction.isStringSelectMenu()) {
     await interaction.deferUpdate().catch(() => {});
     const selectedIdx = interaction.values.map(Number);
+    const added = [], removed = [];
     for (let i = 0; i < rule.options.length; i++) {
       const roleId = rule.options[i].roleId;
       if (!roleId) continue;
       const has = interaction.member.roles.cache.has(roleId);
       const shouldHave = selectedIdx.includes(i);
       try {
-        if (shouldHave && !has) await interaction.member.roles.add(roleId);
-        else if (!shouldHave && has) await interaction.member.roles.remove(roleId);
+        if (shouldHave && !has) { await interaction.member.roles.add(roleId); added.push(rule.options[i].label || 'Rolle'); }
+        else if (!shouldHave && has) { await interaction.member.roles.remove(roleId); removed.push(rule.options[i].label || 'Rolle'); }
       } catch { /* fehlende Berechtigung o.ae. - ignorieren */ }
+    }
+    if (added.length || removed.length) {
+      const lines = [];
+      if (added.length) lines.push(`✅ Rollen ${added.map(l => `**${l}**`).join(', ')} hinzugefügt.`);
+      if (removed.length) lines.push(`❌ Rollen ${removed.map(l => `**${l}**`).join(', ')} entfernt.`);
+      interaction.followUp({ content: lines.join('\n'), ephemeral: true }).catch(() => {});
     }
     return;
   }
