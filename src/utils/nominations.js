@@ -94,14 +94,13 @@ function buildNomEmbed(nom, type, statusOverride) {
 }
 
 function buildVoteRow(nom, type) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`nom|vote|yes|${nom.id}`)
-      .setLabel(type.yesLabel || 'Ja').setStyle(ButtonStyle[cap(type.yesStyle) || 'Success'])
-      .setEmoji(type.yesEmoji || '✅'),
-    new ButtonBuilder().setCustomId(`nom|vote|no|${nom.id}`)
-      .setLabel(type.noLabel || 'Nein').setStyle(ButtonStyle[cap(type.noStyle) || 'Danger'])
-      .setEmoji(type.noEmoji || '❌'),
-  );
+  const yesBtn = new ButtonBuilder().setCustomId(`nom|vote|yes|${nom.id}`)
+    .setLabel(type.yesLabel || 'Ja').setStyle(ButtonStyle[cap(type.yesStyle) || 'Success']);
+  if (type.yesEmoji) yesBtn.setEmoji(type.yesEmoji);
+  const noBtn = new ButtonBuilder().setCustomId(`nom|vote|no|${nom.id}`)
+    .setLabel(type.noLabel || 'Nein').setStyle(ButtonStyle[cap(type.noStyle) || 'Danger']);
+  if (type.noEmoji) noBtn.setEmoji(type.noEmoji);
+  return new ActionRowBuilder().addComponents(yesBtn, noBtn);
 }
 function buildReviewRow(nom) {
   return new ActionRowBuilder().addComponents(
@@ -109,12 +108,28 @@ function buildReviewRow(nom) {
     new ButtonBuilder().setCustomId(`nom|review|deny|${nom.id}`).setLabel('Ablehnen').setStyle(ButtonStyle.Danger).setEmoji('❌'),
   );
 }
-function buildOverrideRow(nom) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`nom|override|${nom.id}`).setLabel('Entscheidung ändern').setStyle(ButtonStyle.Secondary).setEmoji('🔄'),
-  );
-}
 function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+// ── Entscheidung nachtraeglich per Command aendern (/nomc) ───────────────
+async function overrideByMessageId(interaction, messageId) {
+  const list = getNoms(interaction.guild.id);
+  const nom = list.find(n => n.messageId === messageId);
+  if (!nom) return interaction.reply({ content: '❌ Keine Nominierung mit dieser Message-ID gefunden.', ephemeral: true }).catch(() => {});
+  if (nom.status !== 'approved' && nom.status !== 'rejected') {
+    return interaction.reply({ content: '❌ Diese Nominierung läuft noch (Review/Abstimmung) und kann noch nicht geändert werden.', ephemeral: true }).catch(() => {});
+  }
+  const types = getTypes(interaction.guild.id);
+  const type = types.find(t => t.id === nom.typeId);
+  if (!type) return interaction.reply({ content: '❌ Typ nicht gefunden.', ephemeral: true }).catch(() => {});
+  if (type.reviewRoleId && !interaction.member.roles.cache.has(type.reviewRoleId)) {
+    return interaction.reply({ content: '❌ Du darfst das nicht ändern.', ephemeral: true }).catch(() => {});
+  }
+  const flipped = nom.status === 'approved' ? 'rejected' : 'approved';
+  nom.overridden = true;
+  await resolveNomination(interaction.client, interaction.guild, type, nom, flipped, interaction.user.id);
+  saveNoms(interaction.guild.id, list);
+  await interaction.reply({ content: `✅ Entscheidung geändert: jetzt **${flipped === 'approved' ? 'Angenommen' : 'Abgelehnt'}**.`, ephemeral: true }).catch(() => {});
+}
 
 // ── Slash-Command Registrierung (pro Guild, ueberschreibt andere Commands NICHT) ──
 async function registerNominationCommand(client, guildId, type) {
@@ -222,7 +237,36 @@ async function resolveNomination(client, guild, type, nom, outcome, resolvedBy) 
   const channel = await guild.channels.fetch(nom.channelId).catch(() => null);
   const msg = channel ? await channel.messages.fetch(nom.messageId).catch(() => null) : null;
   const embed = buildNomEmbed(nom, type, outcome);
-  if (msg) await msg.edit({ embeds: [embed], components: [buildOverrideRow(nom)] }).catch(() => {});
+  if (msg) await msg.edit({ embeds: [embed], components: [] }).catch(() => {});
+}
+
+// ── Nachricht wurde in Discord geloescht -> im Dashboard markieren ───────
+async function handleMessageDeleted(guildId, messageId) {
+  const list = getNoms(guildId);
+  const nom = list.find(n => n.messageId === messageId && !n.deletedFromDiscord);
+  if (!nom) return;
+  nom.deletedFromDiscord = true;
+  saveNoms(guildId, list);
+}
+
+// ── Nominierung erneut posten (z.B. nach versehentlichem Loeschen) ───────
+async function resendNomination(client, guild, nomId) {
+  const list = getNoms(guild.id);
+  const nom = list.find(n => n.id === nomId);
+  if (!nom) return false;
+  const types = getTypes(guild.id);
+  const type = types.find(t => t.id === nom.typeId);
+  if (!type) return false;
+  const channelId = nom.status === 'pending_review' ? type.reviewChannelId : type.voteChannelId;
+  const channel = channelId ? await guild.channels.fetch(channelId).catch(() => null) : null;
+  if (!channel) return false;
+  const embed = buildNomEmbed(nom, type);
+  const row = nom.status === 'pending_review' ? buildReviewRow(nom) : (nom.status === 'voting' ? buildVoteRow(nom, type) : null);
+  const msg = await channel.send({ embeds: [embed], components: row ? [row] : [] }).catch(() => null);
+  if (!msg) return false;
+  nom.messageId = msg.id; nom.channelId = channel.id; nom.deletedFromDiscord = false;
+  saveNoms(guild.id, list);
+  return true;
 }
 
 // ── Periodischer Check fuer abgelaufene Abstimmungen ─────────────────────
@@ -409,5 +453,6 @@ async function handleButton(interaction) {
 module.exports = {
   initDb, startExpiryChecker, registerNominationCommand,
   handleSlashCommand, handleModalSubmit, handleButton,
+  handleMessageDeleted, resendNomination, overrideByMessageId,
   getTypes, saveTypes, getNoms, saveNoms, uid,
 };
