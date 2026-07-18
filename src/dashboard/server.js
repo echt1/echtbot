@@ -360,7 +360,18 @@ function startDashboard(client) {
       joinRoles: cfg[gid]?.joinRoles || (cfg[gid]?.joinRoleId ? [cfg[gid].joinRoleId] : []),
       counting: counting[gid] || { channelId: null, resetOnFail: true },
       modlogChannelId: cfg[gid]?.modlogChannelId || null,
+      afkEnabled: cfg[gid]?.afkEnabled !== false,
     });
+  });
+ 
+  app.post('/api/settings/:gid/afk', auth, (req, res) => {
+    const { enabled } = req.body;
+    const cfg = db.get('automod');
+    const gid = req.params.gid;
+    cfg[gid] = cfg[gid] || {};
+    cfg[gid].afkEnabled = !!enabled;
+    db.set('automod', cfg);
+    res.json({ ok: true });
   });
 
   app.post('/api/settings/:gid/joinroles', auth, (req, res) => {
