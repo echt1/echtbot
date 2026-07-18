@@ -513,9 +513,73 @@ async function loadSettings(){
           <button class="btn btn-primary btn-sm" onclick="saveModlog('${gid}')">Speichern</button>
           <span class="success" id="modlog-msg"></span>
         </div>
+      </div>
+      <div class="section"><h2>Sticky Messages</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Nachricht bleibt immer als letzte Nachricht im Kanal (wird bei neuer Aktivität automatisch neu gepostet).</p>
+        <div id="sticky-content"><div class="empty">Laden...</div></div>
+      </div>
+      <div class="section"><h2>Server Stats Channels</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Voice-Channel-Namen zeigen Live-Statistiken. Platzhalter: {members} {online} {boosts} {channels} {roles}. Aktualisiert alle 10 Min.</p>
+        <div id="serverstats-content"><div class="empty">Laden...</div></div>
       </div>`;
+  loadStickyMessages(gid);
+  loadServerStats(gid);
   }catch(e){document.getElementById('settings-content').innerHTML='<div class="empty" style="color:var(--red)">Fehler: '+e.message+'</div>';}
 }
+async function loadStickyMessages(gid){
+  const data = await api(`/api/sticky/${gid}`).catch(()=>({}));
+  const el = document.getElementById('sticky-content'); if(!el) return;
+  const rows = Object.entries(data).map(([chId,cfg])=>`<div style="background:var(--surface2);border-radius:6px;padding:10px;margin-bottom:8px">
+    <div style="font-size:.85rem;font-weight:600;margin-bottom:6px">${chName(gid,chId)}</div>
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:6px;white-space:pre-wrap">${(cfg.content||'').slice(0,150)}</div>
+    <button class="btn btn-danger btn-sm" onclick="removeSticky('${gid}','${chId}')">Entfernen</button>
+  </div>`).join('');
+  el.innerHTML = `${rows}
+    <div class="row" style="margin-top:10px">
+      <select id="sticky-channel">${chOptions(gid)}</select>
+    </div>
+    <textarea id="sticky-text" placeholder="Sticky-Nachrichtentext..." style="width:100%;margin-top:8px"></textarea>
+    <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="addSticky('${gid}')">+ Hinzufügen</button>`;
+}
+async function addSticky(gid){
+  const chId = document.getElementById('sticky-channel').value;
+  const content = document.getElementById('sticky-text').value.trim();
+  if(!chId||!content){ alert('Kanal und Text sind Pflicht.'); return; }
+  await api(`/api/sticky/${gid}/${chId}`,{method:'POST',body:JSON.stringify({content})});
+  loadStickyMessages(gid);
+}
+async function removeSticky(gid,chId){
+  await api(`/api/sticky/${gid}/${chId}`,{method:'DELETE'});
+  loadStickyMessages(gid);
+}
+ 
+async function loadServerStats(gid){
+  const list = await api(`/api/serverstats/${gid}`).catch(()=>[]);
+  const el = document.getElementById('serverstats-content'); if(!el) return;
+  const rows = list.map(e=>`<div style="background:var(--surface2);border-radius:6px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+    <div><div style="font-size:.85rem;font-weight:600">${chName(gid,e.channelId)}</div><div style="font-size:.8rem;color:var(--muted)">${e.template}</div></div>
+    <button class="btn btn-danger btn-sm" onclick="removeServerStat('${gid}','${e.channelId}')">✕</button>
+  </div>`).join('');
+  el.innerHTML = `${rows}
+    <p style="font-size:.78rem;color:var(--muted);margin:8px 0">Hinweis: Nutze einen Voice-Channel (der wird umbenannt, nicht ein Text-Channel).</p>
+    <div class="row">
+      <input type="text" id="stats-channel-id" placeholder="Voice-Channel-ID" style="width:200px">
+      <input type="text" id="stats-template" placeholder="👥 Members: {members}" style="width:220px">
+    </div>
+    <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="addServerStat('${gid}')">+ Hinzufügen</button>`;
+}
+async function addServerStat(gid){
+  const channelId = document.getElementById('stats-channel-id').value.trim();
+  const template = document.getElementById('stats-template').value.trim();
+  if(!channelId||!template){ alert('Channel-ID und Template sind Pflicht.'); return; }
+  await api(`/api/serverstats/${gid}`,{method:'POST',body:JSON.stringify({channelId,template})});
+  loadServerStats(gid);
+}
+async function removeServerStat(gid,chId){
+  await api(`/api/serverstats/${gid}/${chId}`,{method:'DELETE'});
+  loadServerStats(gid);
+}
+ 
 async function addJoinRole(gid){
   const rid=document.getElementById('join-role-sel')?.value;if(!rid)return;
   const data=await api(`/api/settings/${gid}`).catch(()=>({}));
