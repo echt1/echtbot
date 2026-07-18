@@ -21,6 +21,8 @@ const FILES = {
   afk: path.join(DATA_DIR, 'afk.json'),
   sticky: path.join(DATA_DIR, 'sticky.json'),
   serverstats: path.join(DATA_DIR, 'serverstats.json'),
+  reactionroles: path.join(DATA_DIR, 'reactionroles.json'),
+  welcomer: path.join(DATA_DIR, 'welcomer.json'),
 };
 
 function readJSON(file) {
