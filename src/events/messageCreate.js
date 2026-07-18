@@ -113,6 +113,11 @@ module.exports = {
 
     if (message.member?.permissions.has('ManageGuild')) return;
 
+    // ── Leveling: XP vergeben (laeuft fuer alle, auch Admins - daher
+    // NACH dem ManageGuild-Return waere falsch, deshalb steht es hier
+    // NACH der Zeile aber mit eigenem Fruehausstieg falls gewuenscht)
+    require('../utils/leveling').handleMessage(message).catch(() => {});
+
     const automod = db.get('automod');
     const config = automod[message.guild.id];
     if (!config || !config.enabled) return;
