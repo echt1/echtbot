@@ -90,6 +90,7 @@ function buildNomEmbed(nom, type, statusOverride) {
   const statusText = { pending_review: '🕓 Wartet auf Review', voting: '🗳️ Abstimmung läuft',
     approved: '✅ Angenommen', rejected: '❌ Abgelehnt' }[status] || status;
   embed.addFields({ name: 'Status', value: statusText, inline: true });
+  if (nom.overridden && nom.overrideReason) embed.addFields({ name: 'Grund der Änderung', value: nom.overrideReason });
   return embed;
 }
 
@@ -111,7 +112,7 @@ function buildReviewRow(nom) {
 function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
 // ── Entscheidung nachtraeglich per Command aendern (/nomc) ───────────────
-async function overrideByMessageId(interaction, messageId) {
+async function overrideByMessageId(interaction, messageId, reason) {
   const list = getNoms(interaction.guild.id);
   const nom = list.find(n => n.messageId === messageId);
   if (!nom) return interaction.reply({ content: '❌ Keine Nominierung mit dieser Message-ID gefunden.', ephemeral: true }).catch(() => {});
@@ -126,6 +127,7 @@ async function overrideByMessageId(interaction, messageId) {
   }
   const flipped = nom.status === 'approved' ? 'rejected' : 'approved';
   nom.overridden = true;
+  if (reason) nom.overrideReason = reason;
   await resolveNomination(interaction.client, interaction.guild, type, nom, flipped, interaction.user.id);
   saveNoms(interaction.guild.id, list);
   await interaction.reply({ content: `✅ Entscheidung geändert: jetzt **${flipped === 'approved' ? 'Angenommen' : 'Abgelehnt'}**.`, ephemeral: true }).catch(() => {});
