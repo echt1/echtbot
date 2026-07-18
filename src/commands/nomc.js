@@ -11,5 +11,4 @@ module.exports = {
   async execute(interaction) {
     await nominations.overrideByMessageId(interaction, interaction.options.getString('message_id'), interaction.options.getString('grund'));
   },
-  },
 };
