@@ -6,8 +6,10 @@ module.exports = {
     .setName('nomc')
     .setDescription('Entscheidung einer bereits abgeschlossenen Nominierung nachträglich ändern')
     .addStringOption(opt => opt.setName('message_id').setDescription('Message-ID der Nominierungs-Nachricht').setRequired(true))
+    .addStringOption(opt => opt.setName('grund').setDescription('Grund für die Änderung (optional, wird im Embed angezeigt)').setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   async execute(interaction) {
-    await nominations.overrideByMessageId(interaction, interaction.options.getString('message_id'));
+    await nominations.overrideByMessageId(interaction, interaction.options.getString('message_id'), interaction.options.getString('grund'));
+  },
   },
 };
