@@ -706,6 +706,52 @@ function startDashboard(client) {
     res.json({ ok: true });
   });
  
+  // ── Reaction Roles ───────────────────────────────────────────────────
+  const reactionRolesModule = require('../utils/reactionRoles');
+  reactionRolesModule.initDb(db);
+
+  app.get('/api/reactionroles/:gid', auth, (req, res) => {
+    res.json(reactionRolesModule.getRules(req.params.gid));
+  });
+
+  app.post('/api/reactionroles/:gid', auth, async (req, res) => {
+    const gid = req.params.gid;
+    const list = reactionRolesModule.getRules(gid);
+    const rule = { ...req.body, id: reactionRolesModule.uid() };
+    const g = client.guilds.cache.get(gid);
+    const msg = g ? await reactionRolesModule.postRule(client, g, rule) : null;
+    if (msg) { rule.messageId = msg.id; rule.channelId = msg.channel.id; }
+    list.push(rule);
+    reactionRolesModule.saveRules(gid, list);
+    res.json({ ok: true, rule });
+  });
+
+  app.delete('/api/reactionroles/:gid/:id', auth, async (req, res) => {
+    const gid = req.params.gid;
+    const list = reactionRolesModule.getRules(gid);
+    const rule = list.find(r => r.id === req.params.id);
+    if (rule?.channelId && rule?.messageId) {
+      const ch = await client.channels.fetch(rule.channelId).catch(() => null);
+      if (ch) { const m = await ch.messages.fetch(rule.messageId).catch(() => null); if (m) await m.delete().catch(() => {}); }
+    }
+    reactionRolesModule.saveRules(gid, list.filter(r => r.id !== req.params.id));
+    res.json({ ok: true });
+  });
+
+  // ── Welcomer ─────────────────────────────────────────────────────────
+  app.get('/api/welcomer/:gid', auth, (req, res) => {
+    const store = db.get('welcomer') || {};
+    res.json(store[req.params.gid] || { enabled: false });
+  });
+
+  app.post('/api/welcomer/:gid', auth, (req, res) => {
+    const store = db.get('welcomer') || {};
+    const gid = req.params.gid;
+    store[gid] = { ...(store[gid] || {}), ...req.body };
+    db.set('welcomer', store);
+    res.json({ ok: true });
+  });
+
   app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
 }
 
