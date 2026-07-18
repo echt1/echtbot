@@ -364,13 +364,30 @@ function startDashboard(client) {
     });
   });
  
-  app.post('/api/settings/:gid/afk', auth, (req, res) => {
+  app.post('/api/settings/:gid/afk', auth, async (req, res) => {
     const { enabled } = req.body;
     const cfg = db.get('automod');
     const gid = req.params.gid;
     cfg[gid] = cfg[gid] || {};
     cfg[gid].afkEnabled = !!enabled;
     db.set('automod', cfg);
+
+    if (process.env.CLIENT_ID) {
+      try {
+        const { REST, Routes } = require('discord.js');
+        const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+        const existing = await rest.get(Routes.applicationGuildCommands(process.env.CLIENT_ID, gid));
+        const afkCmd = existing.find(c => c.name === 'afk');
+        if (!enabled && afkCmd) {
+          await rest.delete(Routes.applicationGuildCommand(process.env.CLIENT_ID, gid, afkCmd.id));
+        } else if (enabled && !afkCmd) {
+          const afkCommandFile = require('../commands/afk');
+          await rest.post(Routes.applicationGuildCommands(process.env.CLIENT_ID, gid), { body: afkCommandFile.data.toJSON() });
+        }
+      } catch (err) {
+        console.error('[AFK-Toggle] Discord API Fehler:', err.message);
+      }
+    }
     res.json({ ok: true });
   });
 
