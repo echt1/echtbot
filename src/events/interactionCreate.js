@@ -7,7 +7,7 @@ const nominations = require('../utils/nominations');
 const reactionRoles = require('../utils/reactionRoles');
 
 
-async function createTicketChannel(interaction, prefix, categoryLabel, formData) {
+async function createTicketChannel(interaction, prefix, categoryLabel, formData, extraRoleId) {
   const guildConfig = db.get('tickets');
   const guildData   = guildConfig[interaction.guild.id];
 
@@ -32,15 +32,19 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData)
   const safeName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user';
   const channelName = (prefix ? `${prefix}-ticket-${safeName}` : `ticket-${safeName}`).slice(0, 90);
 
+  const overwrites = [
+    { id: interaction.guild.roles.everyone,  deny:  [PermissionFlagsBits.ViewChannel] },
+    { id: interaction.user.id,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    { id: guildData.supportRoleId,           allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+  ];
+  if (extraRoleId && extraRoleId !== guildData.supportRoleId) {
+    overwrites.push({ id: extraRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
+  }
   const ticketChannel = await interaction.guild.channels.create({
     name: channelName,
     type: ChannelType.GuildText,
     parent: guildData.categoryId,
-    permissionOverwrites: [
-      { id: interaction.guild.roles.everyone,  deny:  [PermissionFlagsBits.ViewChannel] },
-      { id: interaction.user.id,               allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-      { id: guildData.supportRoleId,           allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-    ],
+    permissionOverwrites: overwrites,
   });
 
   guildData.tickets = guildData.tickets || {};
@@ -67,7 +71,11 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData)
     new ButtonBuilder().setCustomId('ticket_close_btn').setLabel('Ticket schließen').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
   );
 
-  await ticketChannel.send({ content: `<@&${guildData.supportRoleId}> <@${interaction.user.id}>`, embeds: [embed], components: [row] });
+  const pingRoles = extraRoleId && extraRoleId !== guildData.supportRoleId
+    ? `<@&${guildData.supportRoleId}> <@&${extraRoleId}>`
+    : `<@&${guildData.supportRoleId}>`;
+  await ticketChannel.send({ content: `${pingRoles} <@${interaction.user.id}>`, embeds: [embed], components: [row] });
+
   await interaction.editReply({ content: `✅ Dein Ticket wurde erstellt: ${ticketChannel}` });
 }
 
@@ -236,6 +244,22 @@ async function handleInteraction(interaction) {
       const guildData = db.get('tickets')[interaction.guild.id];
       const category  = guildData?.categories?.find(c => c.prefix === prefix);
 
+      if (category?.hasSubcategories && category.subcategories?.length) {
+        const menu = new StringSelectMenuBuilder()
+          .setCustomId(`ticket_subcat_${prefix}`)
+          .setPlaceholder('Bitte genauer auswählen...')
+          .addOptions(category.subcategories.slice(0, 25).map((s, i) => ({
+            label: (s.label || `Option ${i + 1}`).slice(0, 100),
+            value: String(i),
+            emoji: s.emoji || undefined,
+          })));
+        return interaction.reply({
+          content: `Bitte wähle eine genauere Kategorie für **${category.label}**:`,
+          components: [new ActionRowBuilder().addComponents(menu)],
+          ephemeral: true,
+        });
+      }
+
       if (category?.hasForm && category.formFields?.length) {
         const fields = category.formFields.slice(0, 5);
         const modal  = new ModalBuilder()
@@ -259,18 +283,61 @@ async function handleInteraction(interaction) {
       return createTicketChannel(interaction, prefix, category?.label || prefix, null);
     }
 
-    // ── Ticket: Modal-Submit ────────────────────────────────────────
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('ticket_modal_')) {
-      const prefix    = interaction.customId.replace('ticket_modal_', '');
+    // ── Ticket: Unterkategorie-Auswahl ───────────────────────────────
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ticket_subcat_')) {
+      const prefix    = interaction.customId.replace('ticket_subcat_', '');
       const guildData = db.get('tickets')[interaction.guild.id];
       const category  = guildData?.categories?.find(c => c.prefix === prefix);
-      const fields    = category?.formFields || [];
-      const formData  = fields.map((f, i) => {
+      const subIdx    = Number(interaction.values[0]);
+      const sub       = category?.subcategories?.[subIdx];
+      const label     = sub ? `${category.label} - ${sub.label}` : (category?.label || prefix);
+
+      if (sub?.hasForm && sub.formFields?.length) {
+        const fields = sub.formFields.slice(0, 5);
+        const modal  = new ModalBuilder()
+          .setCustomId(`ticket_modal_${prefix}__sub${subIdx}`)
+          .setTitle(label.slice(0, 45))
+          .addComponents(
+            ...fields.map((field, i) => {
+              const input = new TextInputBuilder()
+                .setCustomId(`field_${i}`)
+                .setLabel((field.label || `Feld ${i + 1}`).slice(0, 45))
+                .setStyle(field.style === 'long' ? TextInputStyle.Paragraph : TextInputStyle.Short)
+                .setRequired(field.required !== false);
+              if (field.placeholder) input.setPlaceholder(field.placeholder.slice(0, 100));
+              return new ActionRowBuilder().addComponents(input);
+            })
+          );
+        return interaction.showModal(modal);
+      }
+
+      return createTicketChannel(interaction, prefix, label, null, sub?.roleId);
+    }
+
+    // ── Ticket: Modal-Submit ────────────────────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('ticket_modal_')) {
+      const raw = interaction.customId.replace('ticket_modal_', '');
+      const [prefix, subPart] = raw.split('__sub');
+      const guildData = db.get('tickets')[interaction.guild.id];
+      const category  = guildData?.categories?.find(c => c.prefix === prefix);
+
+      let fields, label, extraRoleId;
+      if (subPart !== undefined) {
+        const sub = category?.subcategories?.[Number(subPart)];
+        fields = sub?.formFields || [];
+        label = sub ? `${category.label} - ${sub.label}` : (category?.label || prefix);
+        extraRoleId = sub?.roleId;
+      } else {
+        fields = category?.formFields || [];
+        label = category?.label || prefix;
+      }
+
+      const formData = fields.map((f, i) => {
         let value = '';
         try { value = interaction.fields.getTextInputValue(`field_${i}`); } catch { value = ''; }
         return { label: f.label, value };
       });
-      return createTicketChannel(interaction, prefix, category?.label || prefix, formData);
+      return createTicketChannel(interaction, prefix, label, formData, extraRoleId);
     }
 
     // ── Ticket: Button (kein Kategorien-Setup) ──────────────────────
