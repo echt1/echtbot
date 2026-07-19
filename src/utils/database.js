@@ -28,6 +28,7 @@ const FILES = {
   levelingusers: path.join(DATA_DIR, 'levelingusers.json'),
   birthdays: path.join(DATA_DIR, 'birthdays.json'),
   birthdayconfig: path.join(DATA_DIR, 'birthdayconfig.json'),
+  countdowns: path.join(DATA_DIR, 'countdowns.json'),
 };
 
 function readJSON(file) {
