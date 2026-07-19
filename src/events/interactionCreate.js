@@ -1,5 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
-        PermissionFlagsBits, ChannelType,
+        PermissionFlagsBits, ChannelType, StringSelectMenuBuilder,
         ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const db = require('../utils/database');
 const { handleSlashCommand, handleComponentInteraction, handleModalInteraction } = require('../utils/customCommands');
