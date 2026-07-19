@@ -13,8 +13,10 @@ function setBirthday(gid, userId, month, day) {
 }
 function removeBirthday(gid, userId) {
   const store = db.get('birthdays') || {};
+  const existed = !!store[gid]?.[userId];
   if (store[gid]) delete store[gid][userId];
   db.set('birthdays', store);
+  return existed;
 }
 function getCfg(gid) { return (db.get('birthdayconfig') || {})[gid] || {}; }
 function saveCfg(gid, cfg) { const s = db.get('birthdayconfig') || {}; s[gid] = cfg; db.set('birthdayconfig', s); }
