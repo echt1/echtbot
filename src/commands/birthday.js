@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const birthday = require('../utils/birthday');
+const db = require('../utils/database');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -10,14 +11,18 @@ module.exports = {
       .addIntegerOption(o => o.setName('tag').setDescription('1-31').setRequired(true).setMinValue(1).setMaxValue(31)))
     .addSubcommand(sub => sub.setName('remove').setDescription('Geburtstag entfernen')),
   async execute(interaction) {
+    const cfg = birthday.getCfg(interaction.guild.id);
+    if (cfg.enabled === false) {
+      return interaction.reply({ content: '❌ Das Geburtstags-Feature ist auf diesem Server deaktiviert.', ephemeral: true });
+    }
     if (interaction.options.getSubcommand() === 'set') {
       const month = interaction.options.getInteger('monat');
       const day = interaction.options.getInteger('tag');
       birthday.setBirthday(interaction.guild.id, interaction.user.id, month, day);
       await interaction.reply({ content: `🎂 Geburtstag gespeichert: ${day}.${month}.`, ephemeral: true });
     } else {
-      birthday.removeBirthday(interaction.guild.id, interaction.user.id);
-      await interaction.reply({ content: '🗑️ Geburtstag entfernt.', ephemeral: true });
+      const existed = birthday.removeBirthday(interaction.guild.id, interaction.user.id);
+      await interaction.reply({ content: existed ? '🗑️ Geburtstag entfernt.' : 'ℹ️ Du hattest gar keinen Geburtstag gespeichert.', ephemeral: true });
     }
   },
 };
