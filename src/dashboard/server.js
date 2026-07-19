@@ -148,7 +148,7 @@ function startDashboard(client) {
   });
 
   app.post('/api/tickets/:gid/categories', auth, (req, res) => {
-    const { action, label, prefix, description, emoji, hasForm, formFields } = req.body;
+    const { action, label, prefix, description, emoji, hasForm, formFields, hasSubcategories, subcategories } = req.body;
     const tickets = db.get('tickets');
     const gid = req.params.gid;
     tickets[gid] = tickets[gid] || { tickets: {}, categories: [] };
@@ -164,9 +164,24 @@ function startDashboard(client) {
               placeholder: String(f.placeholder || '').slice(0, 100),
             }))
           : [];
+        const cleanSubs = Array.isArray(subcategories)
+          ? subcategories.filter(s => s && s.label).slice(0, 25).map(s => ({
+              label: String(s.label).slice(0, 45),
+              emoji: String(s.emoji || '').slice(0, 10),
+              roleId: s.roleId || null,
+              hasForm: !!s.hasForm,
+              formFields: Array.isArray(s.formFields) ? s.formFields.filter(f => f && f.label).slice(0, 5).map(f => ({
+                label: String(f.label).slice(0, 45),
+                style: f.style === 'long' ? 'long' : 'short',
+                required: !!f.required,
+                placeholder: String(f.placeholder || '').slice(0, 100),
+              })) : [],
+            }))
+          : [];
         const newEntry = {
           label, prefix: p, description: description || '', emoji: emoji || '',
           hasForm: !!hasForm, formFields: cleanFields,
+          hasSubcategories: !!hasSubcategories, subcategories: cleanSubs,
         };
         const idx = tickets[gid].categories.findIndex(c => c.prefix === p);
         if (idx !== -1) tickets[gid].categories[idx] = newEntry;
