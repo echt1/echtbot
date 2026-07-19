@@ -799,6 +799,40 @@ function startDashboard(client) {
     res.json({ ok: true });
   });
 
+ // ── Server-Backup (Export/Import der Bot-Konfiguration, KEINE
+  // Discord-Nachrichten/Server-Struktur - nur eure eigenen Einstellungen) ──
+  const BACKUP_KEYS = [
+    'automod', 'tickets', 'social', 'counting', 'j2c', 'customcommands', 'ccvars',
+    'nominationTypes', 'linkedroles', 'afk', 'sticky', 'serverstats', 'reactionroles',
+    'welcomer', 'starboard', 'leveling', 'levelingusers', 'birthdays', 'birthdayconfig', 'warnings',
+  ];
+
+  app.get('/api/backup/:gid', auth, (req, res) => {
+    const gid = req.params.gid;
+    const backup = { exportedAt: Date.now(), guildId: gid, botVersion: 1, data: {} };
+    for (const key of BACKUP_KEYS) {
+      const store = db.get(key) || {};
+      if (store[gid] !== undefined) backup.data[key] = store[gid];
+    }
+    res.setHeader('Content-Disposition', `attachment; filename="backup-${gid}-${Date.now()}.json"`);
+    res.json(backup);
+  });
+
+  app.post('/api/backup/:gid/restore', auth, (req, res) => {
+    const gid = req.params.gid;
+    const { data } = req.body;
+    if (!data || typeof data !== 'object') return res.status(400).json({ error: 'Ungültiges Backup-Format' });
+    let restored = 0;
+    for (const key of Object.keys(data)) {
+      if (!BACKUP_KEYS.includes(key)) continue;
+      const store = db.get(key) || {};
+      store[gid] = data[key];
+      db.set(key, store);
+      restored++;
+    }
+    res.json({ ok: true, restored });
+  });
+
   app.listen(PORT, '0.0.0.0', () => console.log(`[Dashboard] Läuft auf Port ${PORT}`));
 }
 
