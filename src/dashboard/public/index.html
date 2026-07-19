@@ -287,7 +287,7 @@ input[type=color]{width:40px;height:36px;border:1px solid var(--border);border-r
 </div>
 
 <script>
-let TOKEN='', guilds={}, chCache={}, roleCache={}, vcCache={}, catFormFields=[];
+let TOKEN='', guilds={}, chCache={}, roleCache={}, vcCache={}, catFormFields=[], catSubcats=[];
 
 function doLogin(){
   TOKEN=document.getElementById('token-input').value.trim();
@@ -1043,6 +1043,17 @@ async function loadTickets(){
             </div>
             <div id="field-list" style="display:flex;flex-direction:column;gap:8px"></div>
           </div>
+          <div class="row" style="margin-bottom:12px">
+            <label style="min-width:unset;font-size:.85rem;color:var(--muted)">Unterkategorien anbieten (z.B. Team-Bewerbung → Cutter/Design/Dev)</label>
+            <label class="toggle"><input type="checkbox" id="cat-subcat-toggle" onchange="toggleSubcatFields()"><span class="slider"></span></label>
+          </div>
+          <div id="cat-subcat-fields" style="display:none;margin-bottom:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:.85rem;font-weight:600">Unterkategorien <span style="color:var(--muted);font-weight:400">(max. 25)</span></span>
+              <button class="btn btn-ghost btn-sm" onclick="addSubcat()">+ Unterkategorie hinzufügen</button>
+            </div>
+            <div id="subcat-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
           <div style="display:flex;gap:8px;align-items:center">
             <button class="btn btn-primary btn-sm" onclick="addCat('${gid}')">Speichern</button>
             <button class="btn btn-ghost btn-sm" id="cat-cancel" onclick="resetCatForm()" style="display:none">Abbrechen</button>
@@ -1078,6 +1089,9 @@ function editCat(gid,cat){
     catFormFields=[];
   }
   toggleFormFields();
+  catSubcats = (cat.subcategories||[]).map(s=>({...s, formFields:(s.formFields||[]).map(f=>({...f}))}));
+  document.getElementById('cat-subcat-toggle').checked=!!cat.hasSubcategories;
+  toggleSubcatFields();
   document.getElementById('cat-edit-prefix').value=cat.prefix;
   document.getElementById('cat-cancel').style.display='';
   document.getElementById('cat-form-title').textContent='✏️ Kategorie bearbeiten';
@@ -1127,11 +1141,61 @@ function renderFieldList(){
       </div>
     </div>`).join('');
 }
+function toggleSubcatFields(){
+  const show=document.getElementById('cat-subcat-toggle').checked;
+  document.getElementById('cat-subcat-fields').style.display=show?'block':'none';
+  if(show&&catSubcats.length===0)addSubcat();
+  else renderSubcatList();
+}
+function addSubcat(){
+  if(catSubcats.length>=25)return;
+  catSubcats.push({label:'',emoji:'',roleId:'',hasForm:false,formFields:[]});
+  renderSubcatList();
+}
+function removeSubcat(i){
+  catSubcats.splice(i,1);
+  renderSubcatList();
+}
+function renderSubcatList(){
+  const list=document.getElementById('subcat-list');if(!list)return;
+  const gid=firstGuild();
+  if(!catSubcats.length){list.innerHTML='<div style="color:var(--muted);font-size:.82rem;padding:8px">Noch keine Unterkategorien.</div>';return;}
+  list.innerHTML=catSubcats.map((s,i)=>`
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:.78rem;color:var(--muted);min-width:20px">${i+1}.</span>
+        <input type="text" placeholder="Name *" value="${(s.label||'').replace(/"/g,'&quot;')}" oninput="catSubcats[${i}].label=this.value" style="flex:1">
+        <input type="text" placeholder="😀" value="${s.emoji||''}" oninput="catSubcats[${i}].emoji=this.value" style="width:50px;text-align:center">
+        <button class="btn btn-danger btn-sm" onclick="removeSubcat(${i})" style="flex-shrink:0">✕</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:.8rem;color:var(--muted);white-space:nowrap">Zusätzliche Rolle (Zugriff+Ping):</span>
+        <select onchange="catSubcats[${i}].roleId=this.value" style="flex:1">
+          <option value="">Keine</option>${roleOptions(gid,s.roleId)}
+        </select>
+      </div>
+      <label style="font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:6px">
+        <input type="checkbox" ${s.hasForm?'checked':''} onchange="catSubcats[${i}].hasForm=this.checked;renderSubcatList()"> Eigenes Formular für diese Unterkategorie
+      </label>
+      ${s.hasForm?`<div style="padding-left:10px;border-left:2px solid var(--border)">
+        ${(s.formFields||[]).map((f,fi)=>`<div style="display:flex;gap:6px;margin-bottom:5px">
+          <input type="text" placeholder="Feldname" value="${(f.label||'').replace(/"/g,'&quot;')}" oninput="catSubcats[${i}].formFields[${fi}].label=this.value" style="flex:1;font-size:.8rem">
+          <select onchange="catSubcats[${i}].formFields[${fi}].style=this.value" style="font-size:.8rem"><option value="short" ${f.style==='short'?'selected':''}>Einzeilig</option><option value="long" ${f.style==='long'?'selected':''}>Mehrzeilig</option></select>
+          <button onclick="catSubcats[${i}].formFields.splice(${fi},1);renderSubcatList()" style="background:none;border:none;color:var(--red);cursor:pointer">✕</button>
+        </div>`).join('')}
+        <button class="btn btn-ghost btn-sm" onclick="catSubcats[${i}].formFields=catSubcats[${i}].formFields||[];catSubcats[${i}].formFields.push({label:'',style:'short',required:true});renderSubcatList()">+ Feld</button>
+      </div>`:''}
+    </div>`).join('');
+}
+
 function resetCatForm(){
   ['cat-prefix','cat-emoji','cat-label','cat-desc','cat-edit-prefix'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   const ft=document.getElementById('cat-form-toggle');if(ft)ft.checked=false;
   catFormFields=[];
   toggleFormFields();
+  const st=document.getElementById('cat-subcat-toggle');if(st)st.checked=false;
+  catSubcats=[];
+  toggleSubcatFields();
   const cc=document.getElementById('cat-cancel');if(cc)cc.style.display='none';
   const ct=document.getElementById('cat-form-title');if(ct)ct.textContent='➕ Neue Kategorie';
 }
@@ -1154,7 +1218,9 @@ async function addCat(gid){
   if(editPrefix&&editPrefix!==prefix){
     await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix:editPrefix})});
   }
-  const r=await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description,emoji,hasForm,formFields})});
+  const hasSubcategories=document.getElementById('cat-subcat-toggle').checked;
+  const subcategories=hasSubcategories?catSubcats.filter(s=>s.label.trim()):[];
+  const r=await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description,emoji,hasForm,formFields,hasSubcategories,subcategories})});
   if(r.error){alert('Fehler: '+r.error);return;}
   resetCatForm();loadTickets();
 }
