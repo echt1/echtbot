@@ -28,7 +28,7 @@ async function checkToday(client) {
   const configs = db.get('birthdayconfig') || {};
   for (const gid of Object.keys(all)) {
     const cfg = configs[gid];
-    if (!cfg?.channelId) continue;
+    if (!cfg?.channelId || cfg.enabled === false) continue;
     const guild = await client.guilds.fetch(gid).catch(() => null);
     if (!guild) continue;
     for (const [userId, bd] of Object.entries(all[gid])) {
