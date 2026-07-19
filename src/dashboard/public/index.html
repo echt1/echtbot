@@ -2462,11 +2462,12 @@ function renderCCCfg(nodeId){
         html+=rsel()+idPicker(node.id,'channelId','Ziel-Voice-Channel',vcCache[g]||[],{value:'',label:'Wählen...'});
         break;
       case 'edit_voice_channel':
-        html+=idPicker(node.id,'channelId','Voice-Channel',vcCache[g]||[],{value:'',label:'Wählen...'})+
+        html+=idPicker(node.id,'channelId','Voice-Channel',vcCache[g]||[],{value:'__current_vc__',label:'📍 Aktueller VC'})+
+          rsel()+
           inp('name','Neuer Name (optional)','Leer = unverändert')+
           inp('userLimit','User-Limit (0-99, optional)','0','number')+
           inp('bitrate','Bitrate in bps (optional, z.B. 64000)','64000','number')+
-          `<p style="color:var(--muted);font-size:.76rem">Beitritts-Berechtigungen (wer joinen darf) lassen sich aktuell nicht per Custom Command ändern - das wäre ein größeres separates Feature. Sag Bescheid falls gewünscht.</p>`;
+          `<p style="color:var(--muted);font-size:.76rem">Bei "Aktueller Voice-Channel des Users" wird der oben unter "Ziel-User" gewählte User (Standard: ausführender User) verwendet, um seinen aktuellen VC zu finden. Beitritts-Berechtigungen (wer joinen darf) lassen sich aktuell nicht per Custom Command ändern - das wäre ein größeres separates Feature. Sag Bescheid falls gewünscht.</p>`;
         break;
       case 'voice_mute':
         html+=rsel()+`<label style="display:flex;align-items:center;gap:7px;margin-bottom:9px;font-size:.83rem"><label class="toggle"><input type="checkbox" ${c.muted!==false?'checked':''} onchange="CC.cmd.nodes.find(n=>n.id==='${node.id}').config.muted=this.checked"><span class="slider"></span></label>Muten (aus = Mute aufheben)</label>`;
