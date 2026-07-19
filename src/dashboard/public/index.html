@@ -496,6 +496,14 @@ async function loadSettings(){
       return r?`<span class="tag">${r.name}<span class="x" data-gid="${gid}" data-rid="${id}" onclick="removeJoinRole(this)">✕</span></span>`:'';
     }).join('')||'<span style="color:var(--muted);font-size:.82rem">Keine Rollen</span>';
     document.getElementById('settings-content').innerHTML=`
+      <div class="section"><h2>💾 Server-Backup</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Exportiert/importiert alle Bot-Konfigurationen für diesen Server (Custom Commands, Tickets, Nominations, Leveling-Daten, Rollen-Regeln, etc.). Betrifft NICHT eure Discord-Nachrichten oder Kanal-/Rollen-Struktur selbst.</p>
+        <button class="btn btn-primary btn-sm" onclick="downloadBackup('${gid}')">⬇️ Backup herunterladen</button>
+        <input type="file" id="backup-file" accept=".json" style="display:none" onchange="restoreBackup('${gid}',this.files[0])">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('backup-file').click()">⬆️ Backup wiederherstellen</button>
+        <span class="success" id="backup-msg" style="margin-left:10px"></span>
+      </div>
+      <div class="section"><h2>Join-Rollen</h2>
       <div class="section"><h2>Join-Rollen</h2>
         <p style="color:var(--muted);font-size:.85rem;margin-bottom:12px">Diese Rollen werden automatisch an neue Member vergeben.</p>
         <div class="tag-cloud" id="joinrole-cloud" style="margin-bottom:10px">${joinRoleTags}</div>
@@ -697,6 +705,23 @@ async function saveBirthdayCfg(gid){
     message: document.getElementById('bday-message').value,
   })});
   flash('bday-msg','✅ Gespeichert.');
+}
+
+function downloadBackup(gid){
+  window.open(`/api/backup/${gid}?token=${encodeURIComponent(TOKEN)}`,'_blank');
+}
+async function restoreBackup(gid, file){
+  if(!file) return;
+  if(!confirm('⚠️ Das überschreibt bestehende Bot-Konfigurationen für diesen Server mit dem Inhalt der Backup-Datei. Fortfahren?')){
+    document.getElementById('backup-file').value='';
+    return;
+  }
+  const text = await file.text();
+  let json; try { json = JSON.parse(text); } catch { alert('Ungültige JSON-Datei.'); return; }
+  const r = await api(`/api/backup/${gid}/restore`,{method:'POST',body:JSON.stringify(json)});
+  document.getElementById('backup-file').value='';
+  if(r.ok){ flash('backup-msg',`✅ Wiederhergestellt (${r.restored} Bereiche). Seite neu laden empfohlen.`); }
+  else alert('Fehler: '+(r.error||'Unbekannt'));
 }
 
 async function addJoinRole(gid){
