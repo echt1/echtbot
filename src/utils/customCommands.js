@@ -430,7 +430,11 @@ async function runAction(node, ctx) {
         break;
       }
       case 'edit_voice_channel': {
-        const channelId = ph(c.channelId, ctx);
+        let channelId = ph(c.channelId, ctx);
+        if (channelId === '__current_vc__') {
+          const member = await resolveTargetMember(c, ctx);
+          channelId = member?.voice?.channelId || null;
+        }
         if (!channelId) break;
         const target = await ctx.guild.channels.fetch(channelId).catch(() => null);
         if (!target) break;
