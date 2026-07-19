@@ -24,6 +24,29 @@ function startDashboard(client) {
     next();
   };
 
+  // Versteckt/zeigt einen einzelnen hardcoded Slash-Command pro Guild,
+  // ohne die Bulk-Overwrite-Route (Tageslimit) zu benutzen.
+  async function toggleGuildCommands(gid, enabled, commandFiles) {
+    if (!process.env.CLIENT_ID) return;
+    try {
+      const { REST, Routes } = require('discord.js');
+      const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+      const existing = await rest.get(Routes.applicationGuildCommands(process.env.CLIENT_ID, gid));
+      for (const fileName of commandFiles) {
+        const name = fileName.replace('.js', '');
+        const existingCmd = existing.find(c => c.name === name);
+        if (!enabled && existingCmd) {
+          await rest.delete(Routes.applicationGuildCommand(process.env.CLIENT_ID, gid, existingCmd.id));
+        } else if (enabled && !existingCmd) {
+          const cmdFile = require(`../commands/${fileName}`);
+          await rest.post(Routes.applicationGuildCommands(process.env.CLIENT_ID, gid), { body: cmdFile.data.toJSON() });
+        }
+      }
+    } catch (err) {
+      console.error('[Command-Toggle] Discord API Fehler:', err.message);
+    }
+  }
+
   app.use(express.static(path.join(__dirname, 'public'), {
     etag: false,
     setHeaders: (res) => res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate'),
@@ -798,9 +821,12 @@ function startDashboard(client) {
   const levelingModule = require('../utils/leveling');
   levelingModule.initDb(db);
   app.get('/api/leveling/:gid', auth, (req, res) => res.json(levelingModule.getCfg(req.params.gid)));
-  app.post('/api/leveling/:gid', auth, (req, res) => {
-    const cfg = levelingModule.getCfg(req.params.gid);
-    levelingModule.saveCfg(req.params.gid, { ...cfg, ...req.body });
+  app.post('/api/leveling/:gid', auth, async (req, res) => {
+    const gid = req.params.gid;
+    const cfg = levelingModule.getCfg(gid);
+    const enabledChanged = 'enabled' in req.body && req.body.enabled !== cfg.enabled;
+    levelingModule.saveCfg(gid, { ...cfg, ...req.body });
+    if (enabledChanged) await toggleGuildCommands(gid, req.body.enabled, ['rank.js', 'leaderboard.js']);
     res.json({ ok: true });
   });
 
@@ -808,9 +834,12 @@ function startDashboard(client) {
   const birthdayModule = require('../utils/birthday');
   birthdayModule.initDb(db);
   app.get('/api/birthday/:gid/config', auth, (req, res) => res.json(birthdayModule.getCfg(req.params.gid)));
-  app.post('/api/birthday/:gid/config', auth, (req, res) => {
-    const cfg = birthdayModule.getCfg(req.params.gid);
-    birthdayModule.saveCfg(req.params.gid, { ...cfg, ...req.body });
+  app.post('/api/birthday/:gid/config', auth, async (req, res) => {
+    const gid = req.params.gid;
+    const cfg = birthdayModule.getCfg(gid);
+    const enabledChanged = 'enabled' in req.body && req.body.enabled !== (cfg.enabled !== false);
+    birthdayModule.saveCfg(gid, { ...cfg, ...req.body });
+    if (enabledChanged) await toggleGuildCommands(gid, req.body.enabled, ['birthday.js']);
     res.json({ ok: true });
   });
 
