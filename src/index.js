@@ -49,6 +49,9 @@ client.once('ready', () => {
   const birthday = require('./utils/birthday');
   birthday.initDb(require('./utils/database'));
   birthday.startBirthdayChecker(client);
+
+  const { startCountdownUpdater } = require('./utils/countdownUpdater');
+  startCountdownUpdater(client);
 });
 process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
 
