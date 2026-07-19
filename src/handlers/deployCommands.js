@@ -87,7 +87,7 @@ const crypto = require('crypto');
       console.log(`Commands für Guild ${process.env.GUILD_ID} registriert (inkl. ${customBodies.length} Custom Command(s) und ${nomBodies.length} Nomination(s)).`);
       const amCfg = db.get('automod');
       amCfg.__deployFingerprint = crypto.createHash('md5').update(JSON.stringify({
-        commands, custom: customStoreCheck[process.env.GUILD_ID], nom: nomStoreCheck[process.env.GUILD_ID],
+        commands, custom: customStore[process.env.GUILD_ID], nom: nomStore[process.env.GUILD_ID],
       })).digest('hex');
       db.set('automod', amCfg);
     } else {
