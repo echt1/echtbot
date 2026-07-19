@@ -691,6 +691,8 @@ async function loadBirthdayCfg(gid){
   const cfg = await api(`/api/birthday/${gid}/config`).catch(()=>({}));
   const el = document.getElementById('bday-content'); if(!el) return;
   el.innerHTML = `
+    <div class="row" style="margin-bottom:10px"><label>Aktiviert</label>
+      <label class="toggle"><input type="checkbox" id="bday-enabled" ${cfg.enabled!==false?'checked':''}><span class="slider"></span></label></div>
     <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Ansage-Kanal</label>
       <select id="bday-channel" style="width:100%">${chOptions(gid,cfg.channelId)}</select></div>
     <div style="margin-bottom:10px"><label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px">Nachricht</label>
@@ -701,6 +703,7 @@ async function loadBirthdayCfg(gid){
 }
 async function saveBirthdayCfg(gid){
   await api(`/api/birthday/${gid}/config`,{method:'POST',body:JSON.stringify({
+    enabled: document.getElementById('bday-enabled').checked,
     channelId: document.getElementById('bday-channel').value,
     message: document.getElementById('bday-message').value,
   })});
