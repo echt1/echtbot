@@ -1,5 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════
-// COUNTDOWN UPDATER - aktualisiert die Countdown-Bilder periodisch
+// COUNTDOWN UPDATER - aktualisiert die Countdown-Bilder auf ausgerichtete
+// 30-Sekunden-Takte (z.B. :00 und :30 jeder Minute), nicht relativ zum
+// Erstellungszeitpunkt
 // ═══════════════════════════════════════════════════════════════════════
 const { AttachmentBuilder } = require('discord.js');
 const db = require('./database');
@@ -14,7 +16,7 @@ function computeDisplay(c) {
 
   let value, unitLabel;
   if (remaining <= 0) {
-    value = '🎉'; unitLabel = 'Abgelaufen';
+    value = '00:00:00'; unitLabel = 'Abgelaufen';
   } else if (remaining < 86400000) {
     const totalSec = Math.floor(remaining / 1000);
     const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
@@ -37,10 +39,10 @@ async function updateAll(client) {
       if (!msg) continue;
 
       const { value, unitLabel, percent } = computeDisplay(c);
-      const dateLabel = new Date(c.targetMs).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' });
+      const dateLabel = new Date(c.targetMs).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Berlin' });
       try {
         const png = await renderCountdownCard({
-          title: c.title, emoji: c.emoji || '📌', dateLabel, value, unitLabel, percent,
+          title: c.title, emoji: c.emoji || '', dateLabel, value, unitLabel, percent,
           modeLabel: `${Math.round(percent * 100)}%`,
         });
         const attachment = new AttachmentBuilder(png, { name: 'countdown.png' });
@@ -52,11 +54,18 @@ async function updateAll(client) {
   }
 }
 
+const INTERVAL_MS = 30_000;
+function msUntilNextAlignedTick() {
+  const now = Date.now();
+  return INTERVAL_MS - (now % INTERVAL_MS);
+}
+
 function startCountdownUpdater(client) {
   updateAll(client);
-  // Alle 30 Sekunden - Discord limitiert Message-Edits, oefter aktualisieren
-  // ist bei vielen gleichzeitigen Countdowns riskant.
-  setInterval(() => updateAll(client), 30_000).unref?.();
+  setTimeout(function tick() {
+    updateAll(client);
+    setInterval(() => updateAll(client), INTERVAL_MS).unref?.();
+  }, msUntilNextAlignedTick());
 }
 
 module.exports = { startCountdownUpdater, updateAll };
