@@ -2,6 +2,18 @@ const { SlashCommandBuilder, AttachmentBuilder, PermissionFlagsBits } = require(
 const db = require('../utils/database');
 const { renderCountdownCard } = require('../utils/countdownCard');
 
+// Eingabe wird als Europe/Berlin-Zeit interpretiert (nicht als Server-
+// Zeitzone, die auf Hosting-Containern meist UTC ist) - beruecksichtigt
+// automatisch Sommer-/Winterzeit.
+function parseAsBerlinTime(dateStr, timeStr) {
+  const approxUtc = new Date(`${dateStr}T${timeStr}:00Z`);
+  const dtf = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', timeZoneName: 'shortOffset' });
+  const offsetPart = dtf.formatToParts(approxUtc).find(p => p.type === 'timeZoneName')?.value || 'GMT+1';
+  const match = offsetPart.match(/GMT([+-]\d+)/);
+  const offsetMin = match ? parseInt(match[1], 10) * 60 : 60;
+  return new Date(approxUtc.getTime() - offsetMin * 60000);
+}
+
 function computeDisplay(c) {
   const now = Date.now();
   const remaining = c.targetMs - now;
@@ -11,7 +23,7 @@ function computeDisplay(c) {
 
   let value, unitLabel;
   if (remaining <= 0) {
-    value = '🎉'; unitLabel = 'Abgelaufen';
+    value = '00:00:00'; unitLabel = 'Abgelaufen';
   } else if (remaining < 86400000) {
     const totalSec = Math.floor(remaining / 1000);
     const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
@@ -21,15 +33,15 @@ function computeDisplay(c) {
     value = Math.ceil(remaining / 86400000);
     unitLabel = 'Tage';
   }
-  return { value, unitLabel, percent, remaining };
+  return { value, unitLabel, percent };
 }
 
 async function buildAttachment(c) {
   const { value, unitLabel, percent } = computeDisplay(c);
-  const dateLabel = new Date(c.targetMs).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' });
+  const dateLabel = new Date(c.targetMs).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Berlin' });
   const png = await renderCountdownCard({
     title: c.title,
-    emoji: c.emoji || '📌',
+    emoji: c.emoji || '', // leer = kein Emoji, Titel wird groesser dargestellt
     dateLabel,
     value,
     unitLabel,
@@ -46,8 +58,8 @@ module.exports = {
     .addSubcommand(sub => sub.setName('create').setDescription('Neuen Countdown in diesem Kanal erstellen')
       .addStringOption(o => o.setName('titel').setDescription('Titel').setRequired(true))
       .addStringOption(o => o.setName('datum').setDescription('Datum (JJJJ-MM-TT)').setRequired(true))
-      .addStringOption(o => o.setName('uhrzeit').setDescription('Uhrzeit (HH:MM, optional, sonst 00:00)').setRequired(false))
-      .addStringOption(o => o.setName('emoji').setDescription('Emoji (optional, Standard 📌)').setRequired(false)))
+      .addStringOption(o => o.setName('uhrzeit').setDescription('Uhrzeit, deutsche Zeit (HH:MM, optional, sonst 00:00)').setRequired(false))
+      .addStringOption(o => o.setName('emoji').setDescription('Emoji (optional, leer lassen = kein Emoji, Titel wird größer)').setRequired(false)))
     .addSubcommand(sub => sub.setName('list').setDescription('Alle Countdowns dieses Servers anzeigen'))
     .addSubcommand(sub => sub.setName('delete').setDescription('Countdown löschen')
       .addStringOption(o => o.setName('id').setDescription('Countdown-ID (siehe /countdown list)').setRequired(true)))
@@ -62,8 +74,8 @@ module.exports = {
       const title = interaction.options.getString('titel');
       const dateStr = interaction.options.getString('datum');
       const timeStr = interaction.options.getString('uhrzeit') || '00:00';
-      const emoji = interaction.options.getString('emoji') || '📌';
-      const target = new Date(`${dateStr}T${timeStr}:00`);
+      const emoji = interaction.options.getString('emoji') || '';
+      const target = parseAsBerlinTime(dateStr, timeStr);
       if (isNaN(target.getTime())) {
         return interaction.reply({ content: '❌ Ungültiges Datum/Uhrzeit-Format. Nutze JJJJ-MM-TT und HH:MM.', ephemeral: true });
       }
@@ -81,7 +93,7 @@ module.exports = {
     if (sub === 'list') {
       const list = store[interaction.guild.id];
       if (!list.length) return interaction.reply({ content: 'Keine aktiven Countdowns.', ephemeral: true });
-      const lines = list.map(c => `\`${c.id}\` — **${c.title}** (${new Date(c.targetMs).toLocaleString('de-DE')})`);
+      const lines = list.map(c => `\`${c.id}\` — **${c.title}** (${new Date(c.targetMs).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })})`);
       return interaction.reply({ content: lines.join('\n'), ephemeral: true });
     }
 
