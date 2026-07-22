@@ -1,7 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════
-// COUNTDOWN UPDATER - aktualisiert die Countdown-Bilder auf ausgerichtete
-// 30-Sekunden-Takte (z.B. :00 und :30 jeder Minute), nicht relativ zum
-// Erstellungszeitpunkt
+// COUNTDOWN UPDATER - selbst-korrigierender Takt (kein Drift ueber Zeit),
+// aktualisiert auf echten :00/:30 Sekunden-Marken
 // ═══════════════════════════════════════════════════════════════════════
 const { AttachmentBuilder } = require('discord.js');
 const db = require('./database');
@@ -17,6 +16,11 @@ function computeDisplay(c) {
   let value, unitLabel;
   if (remaining <= 0) {
     value = '00:00:00'; unitLabel = 'Abgelaufen';
+  } else if (remaining < 3600000) {
+    const totalSec = Math.floor(remaining / 1000);
+    const m = Math.floor(totalSec / 60), s = totalSec % 60;
+    value = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    unitLabel = 'Noch';
   } else if (remaining < 86400000) {
     const totalSec = Math.floor(remaining / 1000);
     const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
@@ -55,17 +59,21 @@ async function updateAll(client) {
 }
 
 const INTERVAL_MS = 30_000;
-function msUntilNextAlignedTick() {
-  const now = Date.now();
-  return INTERVAL_MS - (now % INTERVAL_MS);
+
+// Selbst-korrigierend: berechnet vor JEDEM Tick neu, wie lange es bis zur
+// naechsten echten :00/:30-Marke ist, statt sich auf setInterval's
+// Praezision ueber viele Zyklen hinweg zu verlassen (das driftet).
+function scheduleNextTick(client) {
+  const delay = INTERVAL_MS - (Date.now() % INTERVAL_MS);
+  setTimeout(async () => {
+    await updateAll(client).catch(err => console.error('[Countdown] updateAll Fehler:', err.message));
+    scheduleNextTick(client);
+  }, delay);
 }
 
 function startCountdownUpdater(client) {
-  updateAll(client);
-  setTimeout(function tick() {
-    updateAll(client);
-    setInterval(() => updateAll(client), INTERVAL_MS).unref?.();
-  }, msUntilNextAlignedTick());
+  updateAll(client).catch(() => {});
+  scheduleNextTick(client);
 }
 
-module.exports = { startCountdownUpdater, updateAll };
+module.exports = { startCountdownUpdater, updateAll, computeDisplay };

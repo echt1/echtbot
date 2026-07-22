@@ -1,9 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════
-// COUNTDOWN CARD - rendert die Countdown-Karte als PNG (500x200) - v2
+// COUNTDOWN CARD - rendert die Countdown-Karte als PNG (500x200) - v3
 // ═══════════════════════════════════════════════════════════════════════
-// Braucht: npm install @napi-rs/canvas --save
-// Optional: Plus Jakarta Sans .ttf-Dateien unter assets/fonts/ (siehe unten)
-
 const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 const path = require('path');
 
@@ -35,28 +32,31 @@ function roundRect(ctx, x, y, w, h, r) {
 function toCodepoints(emoji) {
   return [...emoji]
     .map(c => c.codePointAt(0))
-    .filter(cp => cp !== 0xFE0F) // Variation-Selector rausfiltern (Twemoji-Dateinamen haben den nicht)
+    .filter(cp => cp !== 0xFE0F)
     .map(cp => cp.toString(16))
     .join('-');
 }
 
-// Emoji als Bild laden (Twemoji-CDN) statt als Text-Glyph zu rendern -
-// Server-Container haben idR keine Emoji-Schriftart installiert.
+// Cache: einmal geladene (oder fehlgeschlagene) Emojis nicht bei jedem
+// Kartenrender neu vom CDN abrufen - macht's schneller UND zuverlaessiger.
+const emojiCache = new Map();
 async function loadEmojiImage(emoji) {
   if (!emoji) return null;
+  if (emojiCache.has(emoji)) return emojiCache.get(emoji);
+  let img = null;
   try {
     const cp = toCodepoints(emoji);
     const url = `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/${cp}.png`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    return await loadImage(buf);
-  } catch {
-    return null;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) img = await loadImage(Buffer.from(await res.arrayBuffer()));
+    else console.warn(`[CountdownCard] Emoji-CDN antwortete mit ${res.status} für "${emoji}" (${url})`);
+  } catch (err) {
+    console.warn(`[CountdownCard] Emoji-Bild konnte nicht geladen werden ("${emoji}"):`, err.message);
   }
+  emojiCache.set(emoji, img);
+  return img;
 }
 
-// Text abschneiden mit "…", falls zu breit fuer die verfuegbare Flaeche
 function truncateToWidth(ctx, text, maxWidth) {
   if (ctx.measureText(text).width <= maxWidth) return text;
   let t = text;
@@ -64,16 +64,6 @@ function truncateToWidth(ctx, text, maxWidth) {
   return t + '…';
 }
 
-/**
- * @param {object} opts
- * @param {string} opts.title
- * @param {string} [opts.emoji]      leer/undefined = kein Emoji, Titel wird groesser dargestellt
- * @param {string} opts.dateLabel
- * @param {string|number} opts.value
- * @param {string} opts.unitLabel
- * @param {number} opts.percent      0-1
- * @param {string} opts.modeLabel
- */
 async function renderCountdownCard({ title, emoji, dateLabel, value, unitLabel, percent, modeLabel }) {
   ensureFonts();
   const W = 500, H = 200;
@@ -96,28 +86,25 @@ async function renderCountdownCard({ title, emoji, dateLabel, value, unitLabel, 
   ctx.fillRect(0, 0, W, H);
 
   ctx.textBaseline = 'top';
-  const hasEmoji = !!emoji;
-  const emojiImg = hasEmoji ? await loadEmojiImage(emoji) : null;
+  const emojiImg = emoji ? await loadEmojiImage(emoji) : null;
   const leftX = 26;
-  const leftMaxWidth = W - 220; // Platz bis zur Zahl rechts
+  const leftMaxWidth = W - 220;
 
-  if (emojiImg) {
-    ctx.drawImage(emojiImg, leftX, 20, 28, 28);
-  }
+  if (emojiImg) ctx.drawImage(emojiImg, leftX, 20, 28, 28);
 
-  // Titel - groesser & hoeher, wenn kein Emoji vorhanden/geladen ist
-  const titleY = emojiImg ? 62 : 30;
+  // Titel bleibt IMMER auf derselben Y-Position (egal ob Emoji da ist),
+  // nur die Schriftgroesse wird groesser, wenn kein Emoji vorhanden ist.
+  const titleY = 62;
   const titleSize = emojiImg ? 21 : 30;
   ctx.fillStyle = '#f5ede8';
   ctx.font = `${titleSize}px PJS-ExtraBold, sans-serif`;
   ctx.fillText(truncateToWidth(ctx, title, leftMaxWidth), leftX, titleY);
 
-  // Datum
+  // Datum - ebenfalls fixe Position
   ctx.fillStyle = '#9a6a5e';
   ctx.font = '14px PJS-Medium, sans-serif';
-  ctx.fillText(dateLabel, leftX, titleY + 32);
+  ctx.fillText(dateLabel, leftX, 94);
 
-  // Grosse Zahl/Zeit rechts
   ctx.textAlign = 'right';
   const numGrad = ctx.createLinearGradient(W - 220, 20, W - 26, 90);
   numGrad.addColorStop(0, '#f0a882');
@@ -132,7 +119,6 @@ async function renderCountdownCard({ title, emoji, dateLabel, value, unitLabel, 
   ctx.fillText(unitLabel.toUpperCase(), W - 26, 92);
   ctx.textAlign = 'left';
 
-  // Fortschrittsbalken
   const barX = 26, barY = 140, barW = W - 52, barH = 6;
   ctx.fillStyle = '#3a1a12';
   roundRect(ctx, barX, barY, barW, barH, 3);
