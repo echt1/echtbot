@@ -5,6 +5,7 @@ const db = require('../utils/database');
 const { handleSlashCommand, handleComponentInteraction, handleModalInteraction } = require('../utils/customCommands');
 const nominations = require('../utils/nominations');
 const reactionRoles = require('../utils/reactionRoles');
+const countdownCmd = require('../commands/countdown');
 
 
 async function createTicketChannel(interaction, prefix, categoryLabel, formData, extraRoleId) {
@@ -99,6 +100,14 @@ async function handleInteraction(interaction) {
     // ── Reaction Roles ────────────────────────────────────────────────────
     if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith('rr|')) {
       return reactionRoles.handleInteraction(interaction);
+    }
+
+    // ── Countdown Buttons/Modal ──────────────────────────────────────────
+    if (interaction.isButton() && interaction.customId.startsWith('cd|')) {
+      return countdownCmd.handleButton(interaction);
+    }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('cd|')) {
+      return countdownCmd.handleModalSubmit(interaction);
     }
 
     // ── Nominations: Buttons / Formulare ─────────────────────────────────
