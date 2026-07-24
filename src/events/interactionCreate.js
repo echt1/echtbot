@@ -102,9 +102,9 @@ async function handleInteraction(interaction) {
       return reactionRoles.handleInteraction(interaction);
     }
 
-    // ── Countdown Buttons/Modal ──────────────────────────────────────────
-    if (interaction.isButton() && interaction.customId.startsWith('cd|')) {
-      return countdownCmd.handleButton(interaction);
+    // ── Countdown Buttons/Dropdown/Modal ──────────────────────────────────
+    if ((interaction.isButton() || interaction.isStringSelectMenu()) && interaction.customId.startsWith('cd|')) {
+      return countdownCmd.handleInteraction(interaction);
     }
     if (interaction.isModalSubmit() && interaction.customId.startsWith('cd|')) {
       return countdownCmd.handleModalSubmit(interaction);
