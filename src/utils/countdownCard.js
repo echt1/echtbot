@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// COUNTDOWN CARD - rendert die Countdown-Karte als PNG (500x200) - v3
+// COUNTDOWN CARD - rendert die Countdown-Karte als PNG (500x200) - v4
 // ═══════════════════════════════════════════════════════════════════════
 const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 const path = require('path');
@@ -37,8 +37,6 @@ function toCodepoints(emoji) {
     .join('-');
 }
 
-// Cache: einmal geladene (oder fehlgeschlagene) Emojis nicht bei jedem
-// Kartenrender neu vom CDN abrufen - macht's schneller UND zuverlaessiger.
 const emojiCache = new Map();
 async function loadEmojiImage(emoji) {
   if (!emoji) return null;
@@ -49,7 +47,7 @@ async function loadEmojiImage(emoji) {
     const url = `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/${cp}.png`;
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (res.ok) img = await loadImage(Buffer.from(await res.arrayBuffer()));
-    else console.warn(`[CountdownCard] Emoji-CDN antwortete mit ${res.status} für "${emoji}" (${url})`);
+    else console.warn(`[CountdownCard] Emoji-CDN antwortete mit ${res.status} für "${emoji}"`);
   } catch (err) {
     console.warn(`[CountdownCard] Emoji-Bild konnte nicht geladen werden ("${emoji}"):`, err.message);
   }
@@ -85,32 +83,39 @@ async function renderCountdownCard({ title, emoji, dateLabel, value, unitLabel, 
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
-  ctx.textBaseline = 'top';
   const emojiImg = emoji ? await loadEmojiImage(emoji) : null;
   const leftX = 26;
   const leftMaxWidth = W - 220;
 
-  if (emojiImg) ctx.drawImage(emojiImg, leftX, 20, 28, 28);
+  if (emojiImg) {
+    ctx.drawImage(emojiImg, leftX, 20, 28, 28);
+  }
 
-  // Titel bleibt IMMER auf derselben Y-Position (egal ob Emoji da ist),
-  // nur die Schriftgroesse wird groesser, wenn kein Emoji vorhanden ist.
-  const titleY = 62;
+  // Titel - untere Kante bleibt IMMER an derselben Stelle (baseline-basiert
+  // statt top-basiert), egal ob gross (kein Emoji) oder klein (mit Emoji).
+  ctx.textBaseline = 'alphabetic';
+  const titleBaselineY = 80;
   const titleSize = emojiImg ? 21 : 30;
   ctx.fillStyle = '#f5ede8';
   ctx.font = `${titleSize}px PJS-ExtraBold, sans-serif`;
-  ctx.fillText(truncateToWidth(ctx, title, leftMaxWidth), leftX, titleY);
+  ctx.fillText(truncateToWidth(ctx, title, leftMaxWidth), leftX, titleBaselineY);
 
-  // Datum - ebenfalls fixe Position
+  // Datum
+  ctx.textBaseline = 'top';
   ctx.fillStyle = '#9a6a5e';
   ctx.font = '14px PJS-Medium, sans-serif';
   ctx.fillText(dateLabel, leftX, 94);
 
+  // Grosse Zahl/Zeit rechts. Groesse: Tage-Zahl (keine ":") und der
+  // "Fertig!"-Text gross, alle Zeit-Formate mit ":" (egal ob MM:SS oder
+  // HH:MM:SS) einheitlich kleiner.
   ctx.textAlign = 'right';
   const numGrad = ctx.createLinearGradient(W - 220, 20, W - 26, 90);
   numGrad.addColorStop(0, '#f0a882');
   numGrad.addColorStop(1, '#c44a2a');
   ctx.fillStyle = numGrad;
-  const numFontSize = String(value).length > 5 ? 40 : 62;
+  const isTimeFormat = String(value).includes(':');
+  const numFontSize = isTimeFormat ? 40 : 62;
   ctx.font = `${numFontSize}px PJS-ExtraBold, sans-serif`;
   ctx.fillText(String(value), W - 26, numFontSize === 62 ? 22 : 32);
 
@@ -119,6 +124,7 @@ async function renderCountdownCard({ title, emoji, dateLabel, value, unitLabel, 
   ctx.fillText(unitLabel.toUpperCase(), W - 26, 92);
   ctx.textAlign = 'left';
 
+  // Fortschrittsbalken
   const barX = 26, barY = 140, barW = W - 52, barH = 6;
   ctx.fillStyle = '#3a1a12';
   roundRect(ctx, barX, barY, barW, barH, 3);
