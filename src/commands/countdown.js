@@ -1,6 +1,6 @@
 const {
   SlashCommandBuilder, AttachmentBuilder, PermissionFlagsBits,
-  ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder,
   ModalBuilder, TextInputBuilder, TextInputStyle,
 } = require('discord.js');
 const db = require('../utils/database');
@@ -24,7 +24,7 @@ function computeDisplay(c) {
 
   let value, unitLabel;
   if (remaining <= 0) {
-    value = '00:00:00'; unitLabel = 'Abgelaufen';
+    value = 'Fertig!'; unitLabel = '🎉';
   } else if (remaining < 3600000) {
     const totalSec = Math.floor(remaining / 1000);
     const m = Math.floor(totalSec / 60), s = totalSec % 60;
@@ -53,10 +53,29 @@ async function buildAttachment(c) {
 }
 
 function toBerlinDateInputValue(ms) {
-  return new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); // ergibt JJJJ-MM-TT
+  return new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
 }
 function toBerlinTimeInputValue(ms) {
   return new Date(ms).toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });
+}
+
+function buildListMenu(list) {
+  const menu = new StringSelectMenuBuilder().setCustomId('cd|listsel').setPlaceholder('Countdown wählen...')
+    .addOptions(list.slice(0, 25).map(c => ({
+      label: c.title.slice(0, 100),
+      value: c.id,
+      description: new Date(c.targetMs).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }).slice(0, 100),
+    })));
+  return [new ActionRowBuilder().addComponents(menu)];
+}
+
+function buildActionRow(id) {
+  return [new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`cd|repost|${id}`).setLabel('Repost').setStyle(ButtonStyle.Secondary).setEmoji('🔁'),
+    new ButtonBuilder().setCustomId(`cd|edit|${id}`).setLabel('Bearbeiten').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
+    new ButtonBuilder().setCustomId(`cd|delete|${id}`).setLabel('Löschen').setStyle(ButtonStyle.Danger).setEmoji('🗑️'),
+    new ButtonBuilder().setCustomId('cd|back').setLabel('Zurück').setStyle(ButtonStyle.Secondary).setEmoji('↩️'),
+  )];
 }
 
 module.exports = {
@@ -66,12 +85,10 @@ module.exports = {
     .addSubcommand(sub => sub.setName('create').setDescription('Neuen Countdown erstellen')
       .addStringOption(o => o.setName('titel').setDescription('Titel').setRequired(true))
       .addStringOption(o => o.setName('datum').setDescription('Datum (JJJJ-MM-TT)').setRequired(true))
-      .addChannelOption(o => o.setName('kanal').setDescription('Ziel-Kanal').setRequired(true))
+      .addChannelOption(o => o.setName('kanal').setDescription('Ziel-Kanal (optional, sonst aktueller Kanal)').setRequired(false))
       .addStringOption(o => o.setName('uhrzeit').setDescription('Uhrzeit, deutsche Zeit (HH:MM, optional, sonst 00:00)').setRequired(false))
       .addStringOption(o => o.setName('emoji').setDescription('Emoji (optional, leer lassen = kein Emoji, Titel wird größer)').setRequired(false)))
-    .addSubcommand(sub => sub.setName('list').setDescription('Alle Countdowns dieses Servers anzeigen (mit Buttons)'))
-    .addSubcommand(sub => sub.setName('delete').setDescription('Countdown löschen')
-      .addStringOption(o => o.setName('id').setDescription('Countdown-ID (siehe /countdown list)').setRequired(true)))
+    .addSubcommand(sub => sub.setName('list').setDescription('Alle Countdowns dieses Servers verwalten'))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(interaction) {
@@ -84,7 +101,7 @@ module.exports = {
       const dateStr = interaction.options.getString('datum');
       const timeStr = interaction.options.getString('uhrzeit') || '00:00';
       const emoji = interaction.options.getString('emoji') || '';
-      const channel = interaction.options.getChannel('kanal');
+      const channel = interaction.options.getChannel('kanal') || interaction.channel;
       const target = parseAsBerlinTime(dateStr, timeStr);
       if (isNaN(target.getTime())) {
         return interaction.reply({ content: '❌ Ungültiges Datum/Uhrzeit-Format. Nutze JJJJ-MM-TT und HH:MM.', ephemeral: true });
@@ -92,7 +109,7 @@ module.exports = {
       const c = { id: Math.random().toString(36).slice(2, 8), title, emoji, targetMs: target.getTime(), createdAt: Date.now() };
       const attachment = await buildAttachment(c);
       const msg = await channel.send({ files: [attachment] }).catch(() => null);
-      if (!msg) return interaction.reply({ content: '❌ Konnte Countdown nicht in diesem Kanal posten (fehlende Berechtigung?).', ephemeral: true });
+      if (!msg) return interaction.reply({ content: '❌ Konnte Countdown nicht posten (fehlende Berechtigung?).', ephemeral: true });
       c.channelId = msg.channel.id;
       c.messageId = msg.id;
       store[interaction.guild.id].push(c);
@@ -103,41 +120,32 @@ module.exports = {
     if (sub === 'list') {
       const list = store[interaction.guild.id];
       if (!list.length) return interaction.reply({ content: 'Keine aktiven Countdowns.', ephemeral: true });
-      await interaction.reply({ content: `📋 ${list.length} Countdown(s):`, ephemeral: true });
-      for (const c of list.slice(0, 15)) {
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`cd|repost|${c.id}`).setLabel('Repost').setStyle(ButtonStyle.Secondary).setEmoji('🔁'),
-          new ButtonBuilder().setCustomId(`cd|edit|${c.id}`).setLabel('Bearbeiten').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
-          new ButtonBuilder().setCustomId(`cd|delete|${c.id}`).setLabel('Löschen').setStyle(ButtonStyle.Danger).setEmoji('🗑️'),
-        );
-        await interaction.followUp({
-          content: `\`${c.id}\` — **${c.title}** (${new Date(c.targetMs).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })})`,
-          components: [row], ephemeral: true,
-        }).catch(() => {});
-      }
-      return;
-    }
-
-    if (sub === 'delete') {
-      const id = interaction.options.getString('id');
-      const c = store[interaction.guild.id].find(x => x.id === id);
-      if (!c) return interaction.reply({ content: '❌ Countdown nicht gefunden. Nutze /countdown list für die IDs.', ephemeral: true });
-      const ch = await interaction.guild.channels.fetch(c.channelId).catch(() => null);
-      if (ch) {
-        const m = await ch.messages.fetch(c.messageId).catch(() => null);
-        if (m) await m.delete().catch(() => {});
-      }
-      store[interaction.guild.id] = store[interaction.guild.id].filter(x => x.id !== id);
-      db.set('countdowns', store);
-      return interaction.reply({ content: '🗑️ Countdown gelöscht.', ephemeral: true });
+      return interaction.reply({ content: `📋 ${list.length} Countdown(s) - wähle einen aus:`, components: buildListMenu(list), ephemeral: true });
     }
   },
 
-  // ── Aufgerufen aus interactionCreate.js fuer die Buttons in /countdown list ──
-  async handleButton(interaction) {
-    const [, action, id] = interaction.customId.split('|');
+  // ── Aufgerufen aus interactionCreate.js (Buttons UND Select-Menu, "cd|") ──
+  async handleInteraction(interaction) {
     const store = db.get('countdowns') || {};
     const list = store[interaction.guild.id] || [];
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'cd|listsel') {
+      const id = interaction.values[0];
+      const c = list.find(x => x.id === id);
+      if (!c) return interaction.update({ content: '❌ Countdown nicht mehr gefunden.', components: [] }).catch(() => {});
+      return interaction.update({
+        content: `\`${c.id}\` — **${c.title}** (${new Date(c.targetMs).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })})`,
+        components: buildActionRow(c.id),
+      }).catch(() => {});
+    }
+
+    if (interaction.isButton() && interaction.customId === 'cd|back') {
+      if (!list.length) return interaction.update({ content: 'Keine aktiven Countdowns.', components: [] }).catch(() => {});
+      return interaction.update({ content: `📋 ${list.length} Countdown(s) - wähle einen aus:`, components: buildListMenu(list) }).catch(() => {});
+    }
+
+    if (!interaction.isButton()) return;
+    const [, action, id] = interaction.customId.split('|');
     const c = list.find(x => x.id === id);
     if (!c) return interaction.reply({ content: '❌ Countdown nicht gefunden (evtl. schon gelöscht).', ephemeral: true }).catch(() => {});
 
@@ -149,16 +157,20 @@ module.exports = {
       }
       store[interaction.guild.id] = list.filter(x => x.id !== id);
       db.set('countdowns', store);
-      return interaction.reply({ content: '🗑️ Gelöscht.', ephemeral: true }).catch(() => {});
+      const remaining = store[interaction.guild.id];
+      return (remaining.length
+        ? interaction.update({ content: `🗑️ Gelöscht. ${remaining.length} Countdown(s) übrig:`, components: buildListMenu(remaining) })
+        : interaction.update({ content: '🗑️ Gelöscht. Keine Countdowns mehr übrig.', components: [] })
+      ).catch(() => {});
     }
 
     if (action === 'repost') {
-      await interaction.deferReply({ ephemeral: true }).catch(() => {});
+      await interaction.deferUpdate().catch(() => {});
       const attachment = await buildAttachment(c);
       const ch = await interaction.guild.channels.fetch(interaction.channelId).catch(() => null);
       const msg = ch ? await ch.send({ files: [attachment] }).catch(() => null) : null;
       if (msg) { c.channelId = msg.channel.id; c.messageId = msg.id; db.set('countdowns', store); }
-      return interaction.editReply({ content: msg ? `✅ Neu gepostet in ${ch}.` : '❌ Fehlgeschlagen.' }).catch(() => {});
+      return interaction.followUp({ content: msg ? `✅ Neu gepostet in ${ch}.` : '❌ Fehlgeschlagen.', ephemeral: true }).catch(() => {});
     }
 
     if (action === 'edit') {
@@ -173,7 +185,6 @@ module.exports = {
     }
   },
 
-  // ── Aufgerufen aus interactionCreate.js fuer den Bearbeiten-Modal-Submit ──
   async handleModalSubmit(interaction) {
     const [, , id] = interaction.customId.split('|');
     const store = db.get('countdowns') || {};
