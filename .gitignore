@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Umgebungsvariablen (Bot-Token etc. – sollte NIE auf GitHub landen!)
+.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS-Dateien
+.DS_Store
+Thumbs.db
+
+# Editor-Configs
+.vscode/
+.idea/
