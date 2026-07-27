@@ -16,7 +16,7 @@ module.exports = {
       entries.push({
         rank: i + 1,
         username: user ? user.username : e.userId,
-        avatarUrl: user ? user.displayAvatarURL({ extension: 'png', size: 96 }) : null,
+        avatarUrl: user ? user.displayAvatarURL({ extension: 'png', size: 128 }) : null,
         level: e.level,
       });
     }
