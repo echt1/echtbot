@@ -16,6 +16,7 @@ function getUsers(gid) { return (db.get('levelingusers') || {})[gid] || {}; }
 function saveUsers(gid, users) { const s = db.get('levelingusers') || {}; s[gid] = users; db.set('levelingusers', s); }
 
 function levelFromXp(xp) { return Math.floor(0.1 * Math.sqrt(xp)); }
+function xpForLevel(level) { return 100 * level * level; }
 
 const cooldowns = new Map();
 
@@ -64,4 +65,4 @@ function getRank(gid, userId) {
   return { rank: idx === -1 ? null : idx + 1, data: users[userId] || { xp: 0, level: 0 }, total: sorted.length };
 }
 
-module.exports = { initDb, getCfg, saveCfg, handleMessage, getLeaderboard, getRank, levelFromXp };
+module.exports = { initDb, getCfg, saveCfg, handleMessage, getLeaderboard, getRank, levelFromXp, xpForLevel };
