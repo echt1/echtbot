@@ -14,7 +14,9 @@
     "node-cron": "^3.0.3",
     "fast-xml-parser": "^4.5.0",
     "@napi-rs/canvas": "^0.1.53",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "@napi-rs/canvas-linux-x64-musl": "^0.1.53",
+    "@napi-rs/canvas-linux-x64-gnu": "^0.1.53"
   },
   "engines": {
     "node": ">=18.0.0"
