@@ -106,12 +106,13 @@ module.exports = {
       if (isNaN(target.getTime())) {
         return interaction.reply({ content: '❌ Ungültiges Datum/Uhrzeit-Format. Nutze JJJJ-MM-TT und HH:MM.', ephemeral: true });
       }
-      const c = { id: Math.random().toString(36).slice(2, 8), title, emoji, targetMs: target.getTime(), createdAt: Date.now() };
+      const c = { id: Math.random().toString(36).slice(2, 8), title, emoji, targetMs: target.getTime(), createdAt: Date.now(), history: [] };
       const attachment = await buildAttachment(c);
       const msg = await channel.send({ files: [attachment] }).catch(() => null);
       if (!msg) return interaction.reply({ content: '❌ Konnte Countdown nicht posten (fehlende Berechtigung?).', ephemeral: true });
       c.channelId = msg.channel.id;
       c.messageId = msg.id;
+      c.history.push({ channelId: msg.channel.id, messageId: msg.id });
       store[interaction.guild.id].push(c);
       db.set('countdowns', store);
       return interaction.reply({ content: `✅ Countdown "${title}" in ${channel} erstellt (ID: \`${c.id}\`).`, ephemeral: true });
@@ -150,10 +151,13 @@ module.exports = {
     if (!c) return interaction.reply({ content: '❌ Countdown nicht gefunden (evtl. schon gelöscht).', ephemeral: true }).catch(() => {});
 
     if (action === 'delete') {
-      const ch = await interaction.guild.channels.fetch(c.channelId).catch(() => null);
-      if (ch) {
-        const m = await ch.messages.fetch(c.messageId).catch(() => null);
-        if (m) await m.delete().catch(() => {});
+      const refs = c.history?.length ? c.history : [{ channelId: c.channelId, messageId: c.messageId }];
+      for (const ref of refs) {
+        const ch = await interaction.guild.channels.fetch(ref.channelId).catch(() => null);
+        if (ch) {
+          const m = await ch.messages.fetch(ref.messageId).catch(() => null);
+          if (m) await m.delete().catch(() => {});
+        }
       }
       store[interaction.guild.id] = list.filter(x => x.id !== id);
       db.set('countdowns', store);
@@ -169,7 +173,12 @@ module.exports = {
       const attachment = await buildAttachment(c);
       const ch = await interaction.guild.channels.fetch(interaction.channelId).catch(() => null);
       const msg = ch ? await ch.send({ files: [attachment] }).catch(() => null) : null;
-      if (msg) { c.channelId = msg.channel.id; c.messageId = msg.id; db.set('countdowns', store); }
+      if (msg) {
+        c.channelId = msg.channel.id; c.messageId = msg.id;
+        c.history = c.history || [];
+        c.history.push({ channelId: msg.channel.id, messageId: msg.id });
+        db.set('countdowns', store);
+      }
       return interaction.followUp({ content: msg ? `✅ Neu gepostet in ${ch}.` : '❌ Fehlgeschlagen.', ephemeral: true }).catch(() => {});
     }
 
