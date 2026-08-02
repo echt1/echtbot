@@ -19,12 +19,12 @@ function computeDisplay(c) {
     const totalSec = Math.floor(remaining / 1000);
     const m = Math.floor(totalSec / 60), s = totalSec % 60;
     value = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    unitLabel = 'Noch';
+    unitLabel = 'Verbleibend';
   } else if (remaining < 86400000) {
     const totalSec = Math.floor(remaining / 1000);
     const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
     value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    unitLabel = 'Noch';
+    unitLabel = 'Verbleibend';
   } else {
     value = Math.ceil(remaining / 86400000);
     unitLabel = 'Tage';
