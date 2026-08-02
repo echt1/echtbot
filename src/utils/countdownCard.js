@@ -43,8 +43,11 @@ async function loadEmojiImage(emoji) {
   if (emojiCache.has(emoji)) return emojiCache.get(emoji);
   let img = null;
   try {
-    const cp = toCodepoints(emoji);
-    const url = `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/${cp}.png`;
+    // Server-eigenes Discord-Emoji: <:name:id> oder animiert <a:name:id>
+    const customMatch = emoji.match(/^<(a)?:\w+:(\d+)>$/);
+    const url = customMatch
+      ? `https://cdn.discordapp.com/emojis/${customMatch[2]}.${customMatch[1] ? 'gif' : 'png'}`
+      : `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/${toCodepoints(emoji)}.png`;
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (res.ok) img = await loadImage(Buffer.from(await res.arrayBuffer()));
     else console.warn(`[CountdownCard] Emoji-CDN antwortete mit ${res.status} für "${emoji}"`);
@@ -54,6 +57,7 @@ async function loadEmojiImage(emoji) {
   emojiCache.set(emoji, img);
   return img;
 }
+
 
 function truncateToWidth(ctx, text, maxWidth) {
   if (ctx.measureText(text).width <= maxWidth) return text;
