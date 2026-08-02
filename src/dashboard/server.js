@@ -370,7 +370,7 @@ function startDashboard(client) {
     try {
       const ch = await client.channels.fetch(channelId).catch(() => null);
       if (!ch) return res.status(404).json({ error: 'Channel nicht gefunden' });
-      const embed = new EmbedBuilder().setColor(parseInt((color||'#5865F2').replace('#',''),16)).setTimestamp();
+      const embed = new EmbedBuilder().setColor(parseInt((color||'#5865F2').replace('#',''),16));
       if (title)        embed.setTitle(title);
       if (description)  embed.setDescription(description.replace(/\\n/g,'\n'));
       if (imageUrl)     embed.setImage(imageUrl);
