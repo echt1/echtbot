@@ -14,7 +14,7 @@ function computeDisplay(c) {
 
   let value, unitLabel;
   if (remaining <= 0) {
-    value = 'Fertig!'; unitLabel = '🎉';
+    value = '00:00'; unitLabel = 'VERBLEIBEND';
   } else if (remaining < 3600000) {
     const totalSec = Math.floor(remaining / 1000);
     const m = Math.floor(totalSec / 60), s = totalSec % 60;
