@@ -53,6 +53,36 @@ client.once('ready', () => {
   const { startCountdownUpdater } = require('./utils/countdownUpdater');
   startCountdownUpdater(client);
 });
-process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
+const fs = require('fs');
+const path = require('path');
+const LOG_DIR = path.join(__dirname, '..', 'logs');
+if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+const HEALTH_LOG = path.join(LOG_DIR, 'health.log');
+
+function logToFile(line) {
+  try { fs.appendFileSync(HEALTH_LOG, `[${new Date().toISOString()}] ${line}\n`); } catch {}
+}
+
+process.on('unhandledRejection', err => {
+  console.error('Unhandled Rejection:', err);
+  logToFile(`UNHANDLED REJECTION: ${err?.stack || err}`);
+});
+process.on('uncaughtException', err => {
+  console.error('Uncaught Exception:', err);
+  logToFile(`UNCAUGHT EXCEPTION: ${err?.stack || err}`);
+  // NICHT process.exit() aufrufen - Node haette den Prozess sonst eh schon
+  // beendet, wir wollen nur sicherstellen, dass es geloggt wird bevor das passiert.
+});
+process.on('SIGTERM', () => logToFile('SIGTERM empfangen - Prozess wird beendet.'));
+process.on('SIGINT', () => logToFile('SIGINT empfangen - Prozess wird beendet.'));
+process.on('exit', (code) => logToFile(`Prozess beendet sich mit Exit-Code ${code}.`));
+
+// Alle 60 Sekunden Speicherverbrauch mitschreiben, damit man im Nachhinein
+// sehen kann, ob RAM vor einem Neustart konstant hochgelaufen ist
+setInterval(() => {
+  const mem = process.memoryUsage();
+  logToFile(`Memory: rss=${(mem.rss/1024/1024).toFixed(1)}MB heapUsed=${(mem.heapUsed/1024/1024).toFixed(1)}MB heapTotal=${(mem.heapTotal/1024/1024).toFixed(1)}MB external=${(mem.external/1024/1024).toFixed(1)}MB`);
+}, 60_000).unref?.();
+logToFile('=== Bot-Prozess gestartet ===');
 
 client.login(process.env.DISCORD_TOKEN);
