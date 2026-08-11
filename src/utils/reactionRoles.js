@@ -18,10 +18,7 @@ function saveRules(gid, list) {
 
 function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
-async function postRule(client, guild, rule) {
-  const channel = await guild.channels.fetch(rule.channelId).catch(() => null);
-  if (!channel) return null;
-
+function buildMessagePayload(rule) {
   const embed = new EmbedBuilder()
     .setColor(parseInt((rule.color || '#5865F2').replace('#', ''), 16) || 0x5865f2)
     .setTitle(rule.title || 'Rollen auswählen')
@@ -54,8 +51,29 @@ async function postRule(client, guild, rule) {
     });
     components = rows;
   }
+  return { embeds: [embed], components };
+}
 
-  return channel.send({ embeds: [embed], components }).catch(() => null);
+async function postRule(client, guild, rule) {
+  const channel = await guild.channels.fetch(rule.channelId).catch(() => null);
+  if (!channel) return null;
+  return channel.send(buildMessagePayload(rule)).catch(() => null);
+}
+
+// Bearbeitet die bestehende Nachricht statt eine neue zu posten. Falls die
+// alte Nachricht nicht mehr existiert (geloescht) oder sich der Kanal
+// geaendert hat, wird stattdessen neu gepostet.
+async function editRule(client, guild, rule) {
+  if (rule.channelId && rule.messageId) {
+    const channel = await guild.channels.fetch(rule.channelId).catch(() => null);
+    const msg = channel ? await channel.messages.fetch(rule.messageId).catch(() => null) : null;
+    if (msg) {
+      const edited = await msg.edit(buildMessagePayload(rule)).catch(() => null);
+      if (edited) return edited;
+    }
+  }
+  // Fallback: neu posten
+  return postRule(client, guild, rule);
 }
 
 async function handleInteraction(interaction) {
