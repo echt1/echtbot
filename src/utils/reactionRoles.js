@@ -122,4 +122,5 @@ async function handleInteraction(interaction) {
   }
 }
 
-module.exports = { initDb, getRules, saveRules, uid, postRule, handleInteraction };
+module.exports = { initDb, getRules, saveRules, uid, postRule, editRule, handleInteraction };
+
