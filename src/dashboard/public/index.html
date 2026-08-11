@@ -1004,7 +1004,7 @@ async function loadTickets(){
     const cfg=data[gid]||{supportRoleId:'',categories:[]};
     const cats=cfg.categories||[];
     const catRows=cats.map((c,i)=>`<tr>
-      <td><span class="prefix-badge">${c.prefix}</span></td>
+      <td>${c.prefix?`<span class="prefix-badge">${c.prefix}</span>`:'<span style="color:var(--muted);font-size:.78rem">\u2013</span>'}</td>
       <td>${c.emoji||'\u2013'}</td>
       <td>${c.label}${c.description?`<div style="font-size:.78rem;color:var(--muted)">${c.description}</div>`:''}</td>
       <td>${c.hasForm&&c.formFields?.length?`\u2705 <span style="color:var(--muted);font-size:.78rem">${c.formFields.length} Feld${c.formFields.length!==1?'er':''}</span>`:(c.hasForm?'\u2705':'\u2013')}</td>
@@ -1012,15 +1012,20 @@ async function loadTickets(){
         <button class="btn btn-ghost btn-sm" ${i===0?'disabled style="opacity:.3"':''} onclick="moveCat('${gid}',${i},-1)" title="Nach oben">\u2191</button>
         <button class="btn btn-ghost btn-sm" ${i===cats.length-1?'disabled style="opacity:.3"':''} onclick="moveCat('${gid}',${i},1)" title="Nach unten">\u2193</button>
         <button class="btn btn-ghost btn-sm" data-gid="${gid}" data-cat="${encodeURIComponent(JSON.stringify(c))}" onclick="editCatBtn(this)">\u270f\ufe0f</button>
-        <button class="btn btn-danger btn-sm" data-gid="${gid}" data-prefix="${c.prefix}" onclick="removeCatBtn(this)">\u2715</button>
+        <button class="btn btn-danger btn-sm" data-gid="${gid}" data-id="${c.id||c.prefix}" onclick="removeCatBtn(this)">\u2715</button>
       </div></td></tr>`).join('');
     document.getElementById('tickets-content').innerHTML=`
       <div class="section"><h2>Support-Rolle</h2>
-        <div class="row">
+        <div class="row" style="margin-bottom:12px">
           <select id="tk-role">${roleOptions(gid,cfg.supportRoleId)}</select>
-          <button class="btn btn-primary btn-sm" onclick="saveTicketConfig('${gid}')">Speichern</button>
-          <span class="success" id="tk-msg"></span>
         </div>
+        <div class="row" style="margin-bottom:12px">
+          <label>Ticket-Nummer statt Username im Kanalnamen</label>
+          <label class="toggle"><input type="checkbox" id="tk-useNumber" ${cfg.useTicketNumber?'checked':''}><span class="slider"></span></label>
+          <span style="color:var(--muted);font-size:.78rem">z.B. "support-024" statt "support-ticket-echt1"</span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveTicketConfig('${gid}')">Speichern</button>
+        <span class="success" id="tk-msg"></span>
       </div>
       <div class="section"><h2>Ticket-Kategorien</h2>
         <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Nach Änderungen /ticket-setup erneut ausführen.</p>
@@ -1069,11 +1074,12 @@ async function loadTickets(){
 }
 async function saveTicketConfig(gid){
   const role=document.getElementById('tk-role').value;
-  await api(`/api/tickets/${gid}/config`,{method:'POST',body:JSON.stringify({supportRoleId:role})});
+  const useTicketNumber=document.getElementById('tk-useNumber').checked;
+  await api(`/api/tickets/${gid}/config`,{method:'POST',body:JSON.stringify({supportRoleId:role,useTicketNumber})});
   flash('tk-msg','✅ Gespeichert.');
 }
 function editCatBtn(btn){editCat(btn.dataset.gid,JSON.parse(decodeURIComponent(btn.dataset.cat)));}
-function removeCatBtn(btn){removeCat(btn.dataset.gid,btn.dataset.prefix);}
+function removeCatBtn(btn){removeCat(btn.dataset.gid,btn.dataset.id);}
 function editCat(gid,cat){
   document.getElementById('cat-prefix').value=cat.prefix;
   document.getElementById('cat-emoji').value=cat.emoji||'';
@@ -1095,7 +1101,7 @@ function editCat(gid,cat){
   catSubcats = (cat.subcategories||[]).map(s=>({...s, formFields:(s.formFields||[]).map(f=>({...f}))}));
   document.getElementById('cat-subcat-toggle').checked=!!cat.hasSubcategories;
   toggleSubcatFields();
-  document.getElementById('cat-edit-prefix').value=cat.prefix;
+  document.getElementById('cat-edit-prefix').value=cat.id||cat.prefix||'';
   document.getElementById('cat-cancel').style.display='';
   document.getElementById('cat-form-title').textContent='✏️ Kategorie bearbeiten';
   document.getElementById('cat-prefix').focus();
@@ -1205,12 +1211,11 @@ function resetCatForm(){
 async function addCat(gid){
   const prefix=(document.getElementById('cat-prefix').value||'').trim();
   const label=(document.getElementById('cat-label').value||'').trim();
-  if(!prefix||!label){alert('Prefix und Label sind Pflichtfelder.');return;}
+  if(!label){alert('Label ist Pflichtfeld.');return;}
   const description=(document.getElementById('cat-desc').value||'').trim();
   const emoji=(document.getElementById('cat-emoji').value||'').trim();
   const hasForm=document.getElementById('cat-form-toggle').checked;
-  const editPrefix=(document.getElementById('cat-edit-prefix').value||'').trim();
-  // Felder validieren
+  const editId=(document.getElementById('cat-edit-prefix').value||'').trim();
   if(hasForm){
     const invalid=catFormFields.find(f=>!f.label.trim());
     if(invalid){alert('Alle Felder brauchen einen Namen.');return;}
@@ -1218,18 +1223,15 @@ async function addCat(gid){
   const formFields=hasForm?catFormFields.filter(f=>f.label.trim()).map(f=>({
     label:f.label.trim(), style:f.style||'short', required:!!f.required, placeholder:f.placeholder||''
   })):[];
-  if(editPrefix&&editPrefix!==prefix){
-    await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix:editPrefix})});
-  }
   const hasSubcategories=document.getElementById('cat-subcat-toggle').checked;
   const subcategories=hasSubcategories?catSubcats.filter(s=>s.label.trim()):[];
-  const r=await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',label,prefix,description,emoji,hasForm,formFields,hasSubcategories,subcategories})});
+  const r=await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'add',id:editId||undefined,label,prefix,description,emoji,hasForm,formFields,hasSubcategories,subcategories})});
   if(r.error){alert('Fehler: '+r.error);return;}
   resetCatForm();loadTickets();
 }
-async function removeCat(gid,prefix){
+async function removeCat(gid,id){
   if(!confirm('Kategorie l\u00f6schen?'))return;
-  await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',prefix})});
+  await api(`/api/tickets/${gid}/categories`,{method:'POST',body:JSON.stringify({action:'remove',id})});
   loadTickets();
 }
 async function moveCat(gid,index,dir){
@@ -1239,7 +1241,7 @@ async function moveCat(gid,index,dir){
   const j=index+dir;
   if(j<0||j>=cats.length)return;
   [cats[index],cats[j]]=[cats[j],cats[index]];
-  await api(`/api/tickets/${gid}/categories/reorder`,{method:'POST',body:JSON.stringify({order:cats.map(c=>c.prefix)})});
+  await api(`/api/tickets/${gid}/categories/reorder`,{method:'POST',body:JSON.stringify({order:cats.map(c=>c.id||c.prefix)})});
   loadTickets();
 }
 
