@@ -30,8 +30,17 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData,
 
   await interaction.deferReply({ ephemeral: true });
 
+  guildData.ticketCounter = (guildData.ticketCounter || 0) + 1;
+  const ticketNumber = guildData.ticketCounter;
+
   const safeName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user';
-  const channelName = (prefix ? `${prefix}-ticket-${safeName}` : `ticket-${safeName}`).slice(0, 90);
+  let channelName;
+  if (guildData.useTicketNumber) {
+    const padded = String(ticketNumber).padStart(3, '0');
+    channelName = (prefix ? `${prefix}-${padded}` : `ticket-${padded}`).slice(0, 90);
+  } else {
+    channelName = (prefix ? `${prefix}-ticket-${safeName}` : `ticket-${safeName}`).slice(0, 90);
+  }
 
   const overwrites = [
     { id: interaction.guild.roles.everyone,  deny:  [PermissionFlagsBits.ViewChannel] },
@@ -54,6 +63,7 @@ async function createTicketChannel(interaction, prefix, categoryLabel, formData,
     openedAt: Date.now(),
     category: categoryLabel || null,
     claimedBy: null,
+    number: ticketNumber,
   };
   db.set('tickets', guildConfig);
 
@@ -249,13 +259,13 @@ async function handleInteraction(interaction) {
 
     // ── Ticket: Select-Menu ─────────────────────────────────────────
     if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_category') {
-      const prefix    = interaction.values[0];
+      const catId     = interaction.values[0];
       const guildData = db.get('tickets')[interaction.guild.id];
-      const category  = guildData?.categories?.find(c => c.prefix === prefix);
+      const category  = guildData?.categories?.find(c => (c.id || c.prefix) === catId);
 
       if (category?.hasSubcategories && category.subcategories?.length) {
         const menu = new StringSelectMenuBuilder()
-          .setCustomId(`ticket_subcat_${prefix}`)
+          .setCustomId(`ticket_subcat_${catId}`)
           .setPlaceholder('Bitte genauer auswählen...')
           .addOptions(category.subcategories.slice(0, 25).map((s, i) => ({
             label: (s.label || `Option ${i + 1}`).slice(0, 100),
@@ -272,13 +282,13 @@ async function handleInteraction(interaction) {
       if (category?.hasForm && category.formFields?.length) {
         const fields = category.formFields.slice(0, 5);
         const modal  = new ModalBuilder()
-          .setCustomId(`ticket_modal_${prefix}`)
+          .setCustomId(`ticket_modal_${catId}`)
           .setTitle(category.label.slice(0, 45))
           .addComponents(
             ...fields.map((field, i) => {
               const input = new TextInputBuilder()
                 .setCustomId(`field_${i}`)
-                .setLabel(field.label.slice(0, 45))
+                .setLabel((field.label || `Feld ${i + 1}`).slice(0, 45))
                 .setStyle(field.style === 'long' ? TextInputStyle.Paragraph : TextInputStyle.Short)
                 .setRequired(field.required !== false)
                 .setMaxLength(field.style === 'long' ? 1000 : 200);
@@ -289,22 +299,22 @@ async function handleInteraction(interaction) {
         return interaction.showModal(modal);
       }
 
-      return createTicketChannel(interaction, prefix, category?.label || prefix, null);
+      return createTicketChannel(interaction, category?.prefix || '', category?.label || 'Ticket', null);
     }
 
     // ── Ticket: Unterkategorie-Auswahl ───────────────────────────────
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ticket_subcat_')) {
-      const prefix    = interaction.customId.replace('ticket_subcat_', '');
+      const catId     = interaction.customId.replace('ticket_subcat_', '');
       const guildData = db.get('tickets')[interaction.guild.id];
-      const category  = guildData?.categories?.find(c => c.prefix === prefix);
+      const category  = guildData?.categories?.find(c => (c.id || c.prefix) === catId);
       const subIdx    = Number(interaction.values[0]);
       const sub       = category?.subcategories?.[subIdx];
-      const label     = sub ? `${category.label} - ${sub.label}` : (category?.label || prefix);
+      const label     = sub ? `${category.label} - ${sub.label}` : (category?.label || 'Ticket');
 
       if (sub?.hasForm && sub.formFields?.length) {
         const fields = sub.formFields.slice(0, 5);
         const modal  = new ModalBuilder()
-          .setCustomId(`ticket_modal_${prefix}__sub${subIdx}`)
+          .setCustomId(`ticket_modal_${catId}__sub${subIdx}`)
           .setTitle(label.slice(0, 45))
           .addComponents(
             ...fields.map((field, i) => {
@@ -320,25 +330,25 @@ async function handleInteraction(interaction) {
         return interaction.showModal(modal);
       }
 
-      return createTicketChannel(interaction, prefix, label, null, sub?.roleId);
+      return createTicketChannel(interaction, category?.prefix || '', label, null, sub?.roleId);
     }
 
     // ── Ticket: Modal-Submit ────────────────────────────────────────
     if (interaction.isModalSubmit() && interaction.customId.startsWith('ticket_modal_')) {
       const raw = interaction.customId.replace('ticket_modal_', '');
-      const [prefix, subPart] = raw.split('__sub');
+      const [catId, subPart] = raw.split('__sub');
       const guildData = db.get('tickets')[interaction.guild.id];
-      const category  = guildData?.categories?.find(c => c.prefix === prefix);
+      const category  = guildData?.categories?.find(c => (c.id || c.prefix) === catId);
 
       let fields, label, extraRoleId;
       if (subPart !== undefined) {
         const sub = category?.subcategories?.[Number(subPart)];
         fields = sub?.formFields || [];
-        label = sub ? `${category.label} - ${sub.label}` : (category?.label || prefix);
+        label = sub ? `${category.label} - ${sub.label}` : (category?.label || 'Ticket');
         extraRoleId = sub?.roleId;
       } else {
         fields = category?.formFields || [];
-        label = category?.label || prefix;
+        label = category?.label || 'Ticket';
       }
 
       const formData = fields.map((f, i) => {
@@ -346,7 +356,7 @@ async function handleInteraction(interaction) {
         try { value = interaction.fields.getTextInputValue(`field_${i}`); } catch { value = ''; }
         return { label: f.label, value };
       });
-      return createTicketChannel(interaction, prefix, label, formData, extraRoleId);
+      return createTicketChannel(interaction, category?.prefix || '', label, formData, extraRoleId);
     }
 
     // ── Ticket: Button (kein Kategorien-Setup) ──────────────────────
