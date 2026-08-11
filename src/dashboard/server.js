@@ -781,6 +781,22 @@ function startDashboard(client) {
     res.json({ ok: true, rule });
   });
 
+  app.put('/api/reactionroles/:gid/:id', auth, async (req, res) => {
+    const gid = req.params.gid;
+    const list = reactionRolesModule.getRules(gid);
+    const idx = list.findIndex(r => r.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Not found' });
+    const updated = { ...list[idx], ...req.body, id: req.params.id };
+    const g = client.guilds.cache.get(gid);
+    if (g) {
+      const msg = await reactionRolesModule.editRule(client, g, updated);
+      if (msg) { updated.messageId = msg.id; updated.channelId = msg.channel.id; }
+    }
+    list[idx] = updated;
+    reactionRolesModule.saveRules(gid, list);
+    res.json({ ok: true, rule: updated });
+  });
+
   app.delete('/api/reactionroles/:gid/:id', auth, async (req, res) => {
     const gid = req.params.gid;
     const list = reactionRolesModule.getRules(gid);
