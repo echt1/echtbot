@@ -670,6 +670,18 @@ async function loadLevelingCfg(gid){
       </div>`).join('')}</div>
       <button class="btn btn-ghost btn-sm" onclick="window.__lvlRewards.push({level:5,roleId:''});loadLevelingCfg('${gid}')">+ Belohnung</button>
     </div>
+    <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:8px">Rank-Card Embed</div>
+      <input type="text" id="lvl-rank-title" value="${(cfg.rankEmbed?.title||'').replace(/"/g,'&quot;')}" placeholder="Titel (optional, {user} {level} {rank})" style="width:100%;margin-bottom:6px">
+      <input type="text" id="lvl-rank-footer" value="${(cfg.rankEmbed?.footer||'').replace(/"/g,'&quot;')}" placeholder="Footer (optional)" style="width:100%;margin-bottom:6px">
+      <input type="color" id="lvl-rank-color" value="${cfg.rankEmbed?.color||'#5865f2'}">
+    </div>
+    <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:8px">Leaderboard-Card Embed</div>
+      <input type="text" id="lvl-lb-title" value="${(cfg.leaderboardEmbed?.title||'').replace(/"/g,'&quot;')}" placeholder="Titel (optional)" style="width:100%;margin-bottom:6px">
+      <input type="text" id="lvl-lb-footer" value="${(cfg.leaderboardEmbed?.footer||'').replace(/"/g,'&quot;')}" placeholder="Footer (optional)" style="width:100%;margin-bottom:6px">
+      <input type="color" id="lvl-lb-color" value="${cfg.leaderboardEmbed?.color||'#5865f2'}">
+    </div>
     <button class="btn btn-primary btn-sm" onclick="saveLevelingCfg('${gid}')">Speichern</button>
     <span class="success" id="lvl-msg" style="margin-left:10px"></span>`;
   window.__lvlRewards = JSON.parse(JSON.stringify(rewards));
@@ -683,6 +695,8 @@ async function saveLevelingCfg(gid){
     levelUpChannelId: document.getElementById('lvl-channel').value||null,
     levelUpMessage: document.getElementById('lvl-message').value,
     roleRewards: window.__lvlRewards||[],
+    rankEmbed: { title: document.getElementById('lvl-rank-title').value, footer: document.getElementById('lvl-rank-footer').value, color: document.getElementById('lvl-rank-color').value },
+    leaderboardEmbed: { title: document.getElementById('lvl-lb-title').value, footer: document.getElementById('lvl-lb-footer').value, color: document.getElementById('lvl-lb-color').value },
   })});
   flash('lvl-msg','✅ Gespeichert.');
 }
