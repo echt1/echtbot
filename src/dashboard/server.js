@@ -160,58 +160,59 @@ function startDashboard(client) {
   });
 
   app.post('/api/tickets/:gid/config', auth, (req, res) => {
-    const { categoryId, supportRoleId } = req.body;
+    const { categoryId, supportRoleId, useTicketNumber } = req.body;
     const tickets = db.get('tickets');
     const gid = req.params.gid;
     tickets[gid] = tickets[gid] || { tickets: {}, categories: [] };
     if (categoryId)    tickets[gid].categoryId    = categoryId;
     if (supportRoleId) tickets[gid].supportRoleId = supportRoleId;
+    if (useTicketNumber !== undefined) tickets[gid].useTicketNumber = !!useTicketNumber;
     db.set('tickets', tickets);
     res.json({ ok: true });
   });
 
   app.post('/api/tickets/:gid/categories', auth, (req, res) => {
-    const { action, label, prefix, description, emoji, hasForm, formFields, hasSubcategories, subcategories } = req.body;
+    const { action, id, label, prefix, description, emoji, hasForm, formFields, hasSubcategories, subcategories } = req.body;
     const tickets = db.get('tickets');
     const gid = req.params.gid;
     tickets[gid] = tickets[gid] || { tickets: {}, categories: [] };
     tickets[gid].categories = tickets[gid].categories || [];
-    if (action === 'add' && label && prefix) {
-      const p = prefix.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,4);
-      if (p) {
-        const cleanFields = Array.isArray(formFields)
-          ? formFields.filter(f => f && f.label).slice(0, 5).map(f => ({
+    if (action === 'add' && label) {
+      // Prefix ist jetzt optional - nur noch kosmetisch fuer den Kanalnamen
+      const p = (prefix || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 4);
+      const cleanFields = Array.isArray(formFields)
+        ? formFields.filter(f => f && f.label).slice(0, 5).map(f => ({
+            label: String(f.label).slice(0, 45),
+            style: f.style === 'long' ? 'long' : 'short',
+            required: !!f.required,
+            placeholder: String(f.placeholder || '').slice(0, 100),
+          }))
+        : [];
+      const cleanSubs = Array.isArray(subcategories)
+        ? subcategories.filter(s => s && s.label).slice(0, 25).map(s => ({
+            label: String(s.label).slice(0, 45),
+            emoji: String(s.emoji || '').slice(0, 10),
+            roleId: s.roleId || null,
+            hasForm: !!s.hasForm,
+            formFields: Array.isArray(s.formFields) ? s.formFields.filter(f => f && f.label).slice(0, 5).map(f => ({
               label: String(f.label).slice(0, 45),
               style: f.style === 'long' ? 'long' : 'short',
               required: !!f.required,
               placeholder: String(f.placeholder || '').slice(0, 100),
-            }))
-          : [];
-        const cleanSubs = Array.isArray(subcategories)
-          ? subcategories.filter(s => s && s.label).slice(0, 25).map(s => ({
-              label: String(s.label).slice(0, 45),
-              emoji: String(s.emoji || '').slice(0, 10),
-              roleId: s.roleId || null,
-              hasForm: !!s.hasForm,
-              formFields: Array.isArray(s.formFields) ? s.formFields.filter(f => f && f.label).slice(0, 5).map(f => ({
-                label: String(f.label).slice(0, 45),
-                style: f.style === 'long' ? 'long' : 'short',
-                required: !!f.required,
-                placeholder: String(f.placeholder || '').slice(0, 100),
-              })) : [],
-            }))
-          : [];
-        const newEntry = {
-          label, prefix: p, description: description || '', emoji: emoji || '',
-          hasForm: !!hasForm, formFields: cleanFields,
-          hasSubcategories: !!hasSubcategories, subcategories: cleanSubs,
-        };
-        const idx = tickets[gid].categories.findIndex(c => c.prefix === p);
-        if (idx !== -1) tickets[gid].categories[idx] = newEntry;
-        else tickets[gid].categories.push(newEntry);
-      }
-    } else if (action === 'remove' && prefix) {
-      tickets[gid].categories = tickets[gid].categories.filter(c => c.prefix !== prefix);
+            })) : [],
+          }))
+        : [];
+      const catId = id || require('crypto').randomUUID().slice(0, 8);
+      const newEntry = {
+        id: catId, label, prefix: p, description: description || '', emoji: emoji || '',
+        hasForm: !!hasForm, formFields: cleanFields,
+        hasSubcategories: !!hasSubcategories, subcategories: cleanSubs,
+      };
+      const idx = tickets[gid].categories.findIndex(c => (c.id || c.prefix) === catId || c.id === id);
+      if (idx !== -1) tickets[gid].categories[idx] = newEntry;
+      else tickets[gid].categories.push(newEntry);
+    } else if (action === 'remove' && id) {
+      tickets[gid].categories = tickets[gid].categories.filter(c => (c.id || c.prefix) !== id);
     }
     db.set('tickets', tickets);
     res.json({ ok: true, categories: tickets[gid].categories });
@@ -222,13 +223,14 @@ function startDashboard(client) {
     const tickets = db.get('tickets');
     const gid = req.params.gid;
     if (!tickets[gid] || !Array.isArray(order)) return res.json({ ok: true });
-    const map = Object.fromEntries((tickets[gid].categories || []).map(c => [c.prefix, c]));
-    const reordered = order.map(p => map[p]).filter(Boolean);
+    const map = Object.fromEntries((tickets[gid].categories || []).map(c => [c.id || c.prefix, c]));
+    const reordered = order.map(k => map[k]).filter(Boolean);
     for (const c of tickets[gid].categories || []) if (!reordered.includes(c)) reordered.push(c);
     tickets[gid].categories = reordered;
     db.set('tickets', tickets);
     res.json({ ok: true, categories: tickets[gid].categories });
   });
+
 
   // ── Social ─────────────────────────────────────────────────────────
   app.get('/api/social', auth, (req, res) => res.json(db.get('social')));
